@@ -1,0 +1,74 @@
+[
+  {
+    "_type": "url",
+    "ie_key": "Youtube",
+    "id": "F-GPoZGFXqg",
+    "url": "https://www.youtube.com/watch?v=F-GPoZGFXqg",
+    "title": "My brother has made a herb that prevents divorce.",
+    "description": null,
+    "duration": 254.0,
+    "channel_id": null,
+    "channel": null,
+    "channel_url": null,
+    "uploader": null,
+    "uploader_id": null,
+    "uploader_url": null,
+    "thumbnails": [
+      {
+        "url": "https://i.ytimg.com/vi/F-GPoZGFXqg/hqdefault.jpg?sqp=-oaymwE1CKgBEF5IVfKriqkDKAgBFQAAiEIYAXABwAEG8AEB-AHOBYACgAqKAgwIABABGGUgWShKMA8=&rs=AOn4CLBNz2m0-qn3Sd4R8D5MD3au7gGwKg",
+        "height": 94,
+        "width": 168
+      },
+      {
+        "url": "https://i.ytimg.com/vi/F-GPoZGFXqg/hqdefault.jpg?sqp=-oaymwE1CMQBEG5IVfKriqkDKAgBFQAAiEIYAXABwAEG8AEB-AHOBYACgAqKAgwIABABGGUgWShKMA8=&rs=AOn4CLDUzEoFsxRQ3JtL75nebq_Q3goBZA",
+        "height": 110,
+        "width": 196
+      },
+      {
+        "url": "https://i.ytimg.com/vi/F-GPoZGFXqg/hqdefault.jpg?sqp=-oaymwE2CPYBEIoBSFXyq4qpAygIARUAAIhCGAFwAcABBvABAfgBzgWAAoAKigIMCAAQARhlIFkoSjAP&rs=AOn4CLCjuC3iOz8b6UQgk1B_21oQnVdaHw",
+        "height": 138,
+        "width": 246
+      },
+      {
+        "url": "https://i.ytimg.com/vi/F-GPoZGFXqg/hqdefault.jpg?sqp=-oaymwE2CNACELwBSFXyq4qpAygIARUAAIhCGAFwAcABBvABAfgBzgWAAoAKigIMCAAQARhlIFkoSjAP&rs=AOn4CLAuuoU2ndEI3kX84yG6ruGw4mxuyA",
+        "height": 188,
+        "width": 336
+      }
+    ],
+    "timestamp": null,
+    "release_timestamp": null,
+    "availability": null,
+    "view_count": 926,
+    "live_status": null,
+    "channel_is_verified": null,
+    "__x_forwarded_for_ip": null,
+    "webpage_url": "https://www.youtube.com/watch?v=F-GPoZGFXqg",
+    "original_url": "https://www.youtube.com/watch?v=F-GPoZGFXqg",
+    "webpage_url_basename": "watch",
+    "webpage_url_domain": "youtube.com",
+    "extractor": "youtube",
+    "extractor_key": "Youtube",
+    "playlist_count": null,
+    "playlist": "Swad Ke Diwane - Videos",
+    "playlist_id": "UC04ccb8PcLFULgGOIBUOmmA",
+    "playlist_title": "Swad Ke Diwane - Videos",
+    "playlist_uploader": "Swad Ke Diwane",
+    "playlist_uploader_id": "@swadkediwane",
+    "playlist_channel": "Swad Ke Diwane",
+    "playlist_channel_id": "UC04ccb8PcLFULgGOIBUOmmA",
+    "playlist_webpage_url": "https://www.youtube.com/@swadkediwane/videos?sp=CAMSAhAB",
+    "n_entries": 1,
+    "playlist_index": 1,
+    "__last_playlist_index": 1,
+    "playlist_autonumber": 1,
+    "epoch": 1776691702,
+    "duration_string": "4:14",
+    "release_year": null,
+    "_version": {
+      "version": "2026.03.17",
+      "current_git_head": null,
+      "release_git_head": "04d6974f502bbdfaed72c624344f262e30ad9708",
+      "repository": "yt-dlp/yt-dlp"
+    }
+  }
+]
