@@ -178,3 +178,7 @@ installer_files/
 /bin/
 /VC运行库/
 /WPy64-31001/
+*.mp4
+*.jpg
+*.part
+*.ytdl

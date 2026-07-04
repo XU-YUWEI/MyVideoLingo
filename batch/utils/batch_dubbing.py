@@ -1,4 +1,5 @@
-import os
+import os, sys
+import debugpy
 import gc
 import shutil
 import time
@@ -23,6 +24,24 @@ SAVE_DIR = 'batch/output'
 ERROR_OUTPUT_DIR = 'batch/output/ERROR'
 INPUT_DIR = 'batch/input'
 
+# ── 调试器初始化（模块级，仅在主动开启时生效）──
+# 开启方式：将下面这行取消注释即可
+# 关闭方式：保持下面代码块注释，或删除本块
+# 用法：先运行脚本，然后在 VS Code 按 F5 选择 "Attach to Running VideoLingo"
+if os.environ.get("VIDEOLINGO_DEBUG") == "1" or not hasattr(sys, '_debugpy_listen_called'):
+    try:
+        debugpy.listen(5678)
+        sys._debugpy_listen_called = True
+        print("[debug] 🟢 调试器已启动，等待 VS Code 附加到 localhost:5678 ...")
+        # 如需在入口处暂停等待附加，取消下面一行的注释
+        debugpy.wait_for_client()
+        print("[debug] 🔵 继续执行（可在 VS Code 中随时设置断点）")
+    except Exception as e:
+        if "already being" in str(e).lower():
+            pass  # 忽略重复 listen 的提示
+        else:
+            print(f"[debug] ⚠️ 调试器启动失败: {e}")
+
 
 def record_and_update_config(source_language: str, target_language: str):
     """暂存并切换当前任务的源语言与目标语言配置"""
@@ -37,14 +56,64 @@ def record_and_update_config(source_language: str, target_language: str):
     return original_source_lang, original_target_lang
 
 
-def prepare_output_folder():
-    """清空 output 目录（dubbing 通常保留已有字幕文件）"""
-    # 只清理音频相关目录，保留 .srt 等字幕文件
-    for sub_dir in ['audio', 'log', 'gpt_log']:
-        path = os.path.join(OUTPUT_DIR, sub_dir)
-        if os.path.exists(path):
-            shutil.rmtree(path)
-    os.makedirs(os.path.join(OUTPUT_DIR, 'audio'), exist_ok=True)
+def prepare_output_folder(video_file: str = None):
+    """清空 output/ 并从 output/audio/<视频名>/ 恢复中间文件"""
+    video_name = os.path.splitext(video_file)[0] if video_file else None
+    audio_sub_dir = os.path.join(SAVE_DIR, video_name) if video_name else None
+
+    # 1) 先将 output/audio/<视频名>/（如果存在）备份到临时目录
+    temp_backup = None
+    if audio_sub_dir and os.path.exists(audio_sub_dir):
+        temp_backup = os.path.join('batch', 'output', '.temp_audio_backup')
+        if os.path.exists(temp_backup):
+            shutil.rmtree(temp_backup)
+        os.makedirs(temp_backup, exist_ok=True)
+        for item in os.listdir(audio_sub_dir):
+            src = os.path.join(audio_sub_dir, item)
+            dst = os.path.join(temp_backup, item)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst)
+            else:
+                shutil.copy2(src, dst)
+
+    # 2) 清空 output/
+    if os.path.exists(OUTPUT_DIR):
+        shutil.rmtree(OUTPUT_DIR)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # 3) 从临时备份恢复到 output/
+    if temp_backup and os.path.exists(temp_backup):
+        for item in os.listdir(temp_backup):
+            src = os.path.join(temp_backup, item)
+            dst = os.path.join(OUTPUT_DIR, item)
+            if os.path.isdir(src):
+                if os.path.exists(dst):
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+            else:
+                if os.path.exists(dst):
+                    os.remove(dst)
+                shutil.copy2(src, dst)
+        shutil.rmtree(temp_backup)
+        console.print(f"[green]✅ 已从 output/audio/{video_name}/ 恢复中间文件[/green]")
+
+
+def save_audio_subtitles(video_file: str):
+    """将 output/audio/ 下的 .srt 文件保存到 output/audio/<视频名>/"""
+    video_name = os.path.splitext(video_file)[0]
+    audio_dir = os.path.join(OUTPUT_DIR, 'audio')
+    audio_sub_dir = os.path.join(audio_dir, video_name)
+
+    if not os.path.exists(audio_dir):
+        return
+
+    os.makedirs(audio_sub_dir, exist_ok=True)
+
+    for filename in os.listdir(audio_dir):
+        if filename.endswith('.srt'):
+            src = os.path.join(audio_dir, filename)
+            dst = os.path.join(audio_sub_dir, filename)
+            shutil.copy2(src, dst)
 
 
 def restore_from_error(video_file: str):
@@ -97,7 +166,7 @@ def process_single_video(video_file: str, is_retry: bool = False):
     返回 (success: bool, error_step: str, error_message: str)
     """
     if not is_retry:
-        prepare_output_folder()
+        prepare_output_folder(video_file)
 
     steps = [
         ("🎥 复制/下载视频", partial(process_input_file, video_file)),
@@ -134,6 +203,9 @@ def process_single_video(video_file: str, is_retry: bool = False):
                     f"[yellow]第 {attempt + 1} 次尝试失败，正在重试…[/yellow]",
                     border_style="yellow",
                 ))
+
+    # 配音成功后，保存当前字幕文件到 output/audio/<视频名>/ 供后续恢复
+    save_audio_subtitles(video_file)
 
     console.print(Panel("[bold green]🎉 配音生成与混入全部完成！[/bold green]", border_style="green"))
     cleanup(SAVE_DIR)
@@ -191,11 +263,24 @@ def process_batch_dubbing():
             dub_status_msg = f"Error: 未捕获异常 - {str(e)}"
             console.print(f"[bold red]配音处理 {video_file} 时发生异常: {dub_status_msg}[/bold red]")
         finally:
-            # ── 恢复配置 & 写回 Excel ──
+            # ── 恢复配置 ──
             update_key('whisper.language', orig_src)
             update_key('target_language', orig_tgt)
             df.at[index, 'DubbingStatus'] = dub_status_msg
-            df.to_excel(SETTINGS_FILE, index=False)
+
+            # ── 写回 Excel（多次重试，防止文件被 Excel 占用）──
+            for save_attempt in range(5):
+                try:
+                    df.to_excel(SETTINGS_FILE, index=False)
+                    break
+                except PermissionError:
+                    console.print(f"[yellow]⚠️ 无法写入 {SETTINGS_FILE}（可能被 Excel 打开），"
+                                  f"第 {save_attempt + 1}/5 次重试…[/yellow]")
+                    time.sleep(2)
+                except Exception as e:
+                    console.print(f"[red]❌ 写入 {SETTINGS_FILE} 失败: {e}[/red]")
+                    break
+
             gc.collect()
             time.sleep(1)
 
@@ -208,3 +293,4 @@ def process_batch_dubbing():
 
 if __name__ == "__main__":
     process_batch_dubbing()
+

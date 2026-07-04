@@ -76,7 +76,7 @@ pause_before_translate: false
 
 ## ======================== Dubbing Settings ======================== ##
 # TTS selection [sf_fish_tts, openai_tts, gpt_sovits, azure_tts, fish_tts, edge_tts, custom_tts]
-tts_method: 'Fish-Speech'
+tts_method: 'IndexTTS2'
 
 # SiliconFlow FishTTS
 sf_fish_tts:
@@ -124,9 +124,10 @@ gpt_sovits:
 # IndexTTS2 Local Configuration
 index_tts:
   api_key: 'ms-b9cb303b-f65a-4e81-9232-434ef4679b5e'
-  url: 'https://api-inference.modelscope.cn/v1/IndexTeam/IndexTTS-2'
+  url: 'http://127.0.0.1:8080/'
   # 1: 原角色参考, 2: 固定参考
   ref_mode: 1
+  mode: "IndexTeam/IndexTTS-2"
 
 # Fish-Speech Local Configuration
 fish_speech:

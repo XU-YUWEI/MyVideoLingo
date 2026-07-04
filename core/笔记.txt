@@ -1,0 +1,3 @@
+index-tts2的api调用位置core/tts_backend/custom_tts.py:51-79：handle_index_tts 方法
+
+param_17：生成温度 (temperature)，控制生成随机性，越低越稳定，越高越多样
