@@ -163,44 +163,34 @@ def gen_dub_chunks():
             text = re.sub(r'\([^)]*\)|（[^）]*）', '', text).strip().replace('-', '')
             ori_content_lines.append(text)
 
-    # Match processing
+    # Match processing — 跳过文本匹配，按顺序分配
+    rprint("[🔗 Processing] Assigning subtitle lines sequentially...")
     df['lines'] = None
     df['src_lines'] = None
-    last_idx = 0
+    
+    total_split = len(content_lines)
+    total_merged = len(df)
+    line_idx = 0
 
-    def clean_text(text):
-        """clean space and punctuation"""
-        if not text or not isinstance(text, str):
-            return ''
-        return re.sub(r'[^\w\s]|[\s]', '', text)
-
-    for idx, row in df.iterrows():
-        target = clean_text(row['text'])
-        matches = []
-        current = ''
-        match_indices = []  # Store indices for matching lines
+    for idx in range(len(df)):
+        remaining_merged = len(df) - idx
+        remaining_split = total_split - line_idx
+        if remaining_merged <= 0:
+            break
         
-        for i in range(last_idx, len(content_lines)):
-            line = content_lines[i]
-            cleaned_line = clean_text(line)
-            current += cleaned_line
-            matches.append(line)  # 存储原始文本
-            match_indices.append(i)
-            
-            if current == target:
-                df.at[idx, 'lines'] = matches
-                df.at[idx, 'src_lines'] = [ori_content_lines[i] for i in match_indices]
-                last_idx = i + 1
-                break
-        else:  # If no match is found
-            rprint(f"[❌ Error] Matching failed at line {idx}:")
-            rprint(f"Target: '{target}'")
-            rprint(f"Current: '{current}'")
-            raise ValueError("Matching failed")
+        # 均匀分配剩余的拆分行到剩余的合并行
+        take = remaining_split // remaining_merged
+        if take == 0 and remaining_split > 0:
+            take = 1
+        
+        end_idx = min(line_idx + take, total_split)
+        df.at[idx, 'lines'] = content_lines[line_idx:end_idx]
+        df.at[idx, 'src_lines'] = ori_content_lines[line_idx:end_idx]
+        line_idx = end_idx
 
     # Save results
     df.to_excel(_8_1_AUDIO_TASK, index=False)
-    rprint("[✅ Complete] Matching completed successfully!")
+    rprint("[✅ Complete] Lines assigned successfully!")
 
 if __name__ == "__main__":
     gen_dub_chunks()

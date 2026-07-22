@@ -1,27 +1,27 @@
 [
   {
-    "title": "​The Juiciest TURKEY in a Blizzard! 🦃❄️🔥 (Mountain Oven)",
-    "view_count": 108000,
+    "title": "Fire-Kissed Lavash Burger 🏔️🍔🔥 - DAĞDA LAVAŞ BURGER",
+    "view_count": 159000,
     "thumbnails": [
       {
-        "url": "https://i.ytimg.com/vi/hNGSf-HRMGc/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLAob6jGZoavXNn1JtoONAew_jBNvw&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/uQJfoRqKbbY/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLDl-3MgCOhC0Mn64UQ-IQIuXx-e_g&usqp=CCk",
         "height": 720,
         "width": 405
       },
       {
-        "url": "https://i.ytimg.com/vi/hNGSf-HRMGc/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLAaxrgIf6FSUkFaWCbnCUfnT7ZrtA&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/uQJfoRqKbbY/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLDU-zvfaSo07G4cs34kNRHOpRr8oQ&usqp=CCk",
         "height": 608,
         "width": 405
       }
     ],
     "ie_key": "Youtube",
-    "id": "hNGSf-HRMGc",
+    "id": "uQJfoRqKbbY",
     "_type": "url",
-    "url": "https://www.youtube.com/shorts/hNGSf-HRMGc",
+    "url": "https://www.youtube.com/shorts/uQJfoRqKbbY",
     "__x_forwarded_for_ip": null,
-    "webpage_url": "https://www.youtube.com/shorts/hNGSf-HRMGc",
-    "original_url": "https://www.youtube.com/shorts/hNGSf-HRMGc",
-    "webpage_url_basename": "hNGSf-HRMGc",
+    "webpage_url": "https://www.youtube.com/shorts/uQJfoRqKbbY",
+    "original_url": "https://www.youtube.com/shorts/uQJfoRqKbbY",
+    "webpage_url_basename": "uQJfoRqKbbY",
     "webpage_url_domain": "youtube.com",
     "extractor": "youtube",
     "extractor_key": "Youtube",
@@ -34,11 +34,59 @@
     "playlist_channel": "Wilderness Cuisine",
     "playlist_channel_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
     "playlist_webpage_url": "https://www.youtube.com/@WildernessChefCuisine/shorts?sp=CAMSAhAB",
-    "n_entries": 9,
-    "playlist_index": 3,
-    "__last_playlist_index": 10,
+    "n_entries": 13,
+    "playlist_index": 13,
+    "__last_playlist_index": 25,
+    "playlist_autonumber": 1,
+    "epoch": 1784122199,
+    "release_year": null,
+    "_version": {
+      "version": "2026.06.09",
+      "current_git_head": null,
+      "release_git_head": "821bef0f00178916d60dbc86bc0bcb8cc3bae8d5",
+      "repository": "yt-dlp/yt-dlp"
+    }
+  },
+  {
+    "title": "he Most Tender Lamb Liver: Village Style! 🥩🔥",
+    "view_count": 116000,
+    "thumbnails": [
+      {
+        "url": "https://i.ytimg.com/vi/UvedZjyBD7U/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLBkkHL6bMSGdA_OpvdjE-ubSbB4ww&usqp=CCk",
+        "height": 720,
+        "width": 405
+      },
+      {
+        "url": "https://i.ytimg.com/vi/UvedZjyBD7U/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLBzgkf5RYxT4P7vxxkupqkxXTvcyQ&usqp=CCk",
+        "height": 608,
+        "width": 405
+      }
+    ],
+    "ie_key": "Youtube",
+    "id": "UvedZjyBD7U",
+    "_type": "url",
+    "url": "https://www.youtube.com/shorts/UvedZjyBD7U",
+    "__x_forwarded_for_ip": null,
+    "webpage_url": "https://www.youtube.com/shorts/UvedZjyBD7U",
+    "original_url": "https://www.youtube.com/shorts/UvedZjyBD7U",
+    "webpage_url_basename": "UvedZjyBD7U",
+    "webpage_url_domain": "youtube.com",
+    "extractor": "youtube",
+    "extractor_key": "Youtube",
+    "playlist_count": null,
+    "playlist": "Wilderness Cuisine - Shorts",
+    "playlist_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
+    "playlist_title": "Wilderness Cuisine - Shorts",
+    "playlist_uploader": "Wilderness Cuisine",
+    "playlist_uploader_id": "@WildernessChefCuisine",
+    "playlist_channel": "Wilderness Cuisine",
+    "playlist_channel_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
+    "playlist_webpage_url": "https://www.youtube.com/@WildernessChefCuisine/shorts?sp=CAMSAhAB",
+    "n_entries": 13,
+    "playlist_index": 14,
+    "__last_playlist_index": 25,
     "playlist_autonumber": 2,
-    "epoch": 1782306604,
+    "epoch": 1784122199,
     "release_year": null,
     "_version": {
       "version": "2026.06.09",
@@ -48,28 +96,28 @@
     }
   },
   {
-    "title": "Ancient Village Style Layered Kebab! 🤫🏔️🥩🫓🔥",
-    "view_count": 111000,
+    "title": "Primitive Log Grill: Wild Fish! 🪵🐟🔥",
+    "view_count": 67000,
     "thumbnails": [
       {
-        "url": "https://i.ytimg.com/vi/HODJ_H_U39I/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLDpy2O688O8lmEmQjfdNgvV-L7v5w&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/sgeH9V3Hh3M/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLDJudrxNExPMsp-3BoJnqogqzcWAA&usqp=CCk",
         "height": 720,
         "width": 405
       },
       {
-        "url": "https://i.ytimg.com/vi/HODJ_H_U39I/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLCiaVBqXyFAw8nnfMzcWNI9SGeT8g&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/sgeH9V3Hh3M/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLC6iNORzIof3YpL8MMgIYUoq-NmHw&usqp=CCk",
         "height": 608,
         "width": 405
       }
     ],
     "ie_key": "Youtube",
-    "id": "HODJ_H_U39I",
+    "id": "sgeH9V3Hh3M",
     "_type": "url",
-    "url": "https://www.youtube.com/shorts/HODJ_H_U39I",
+    "url": "https://www.youtube.com/shorts/sgeH9V3Hh3M",
     "__x_forwarded_for_ip": null,
-    "webpage_url": "https://www.youtube.com/shorts/HODJ_H_U39I",
-    "original_url": "https://www.youtube.com/shorts/HODJ_H_U39I",
-    "webpage_url_basename": "HODJ_H_U39I",
+    "webpage_url": "https://www.youtube.com/shorts/sgeH9V3Hh3M",
+    "original_url": "https://www.youtube.com/shorts/sgeH9V3Hh3M",
+    "webpage_url_basename": "sgeH9V3Hh3M",
     "webpage_url_domain": "youtube.com",
     "extractor": "youtube",
     "extractor_key": "Youtube",
@@ -82,11 +130,11 @@
     "playlist_channel": "Wilderness Cuisine",
     "playlist_channel_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
     "playlist_webpage_url": "https://www.youtube.com/@WildernessChefCuisine/shorts?sp=CAMSAhAB",
-    "n_entries": 9,
-    "playlist_index": 4,
-    "__last_playlist_index": 10,
+    "n_entries": 13,
+    "playlist_index": 15,
+    "__last_playlist_index": 25,
     "playlist_autonumber": 3,
-    "epoch": 1782306604,
+    "epoch": 1784122199,
     "release_year": null,
     "_version": {
       "version": "2026.06.09",
@@ -96,28 +144,28 @@
     }
   },
   {
-    "title": "Alone in -25°C: 24 Hour Winter Survival Challenge! 🥶🛡️",
-    "view_count": 504000,
+    "title": "Sizzling Potato Cakes vs. Frozen Mountain! ❄️🔥🥔",
+    "view_count": 41000,
     "thumbnails": [
       {
-        "url": "https://i.ytimg.com/vi/Mf4HKADeJ04/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLDhUnylPzr6ZXTjAGu6ziY1zHv7tA&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/8UDyzX1prjY/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLCG6ekFJ2n2URYnk94x-0QxG638vQ&usqp=CCk",
         "height": 720,
         "width": 405
       },
       {
-        "url": "https://i.ytimg.com/vi/Mf4HKADeJ04/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLCU13RImsoCZqHNZ3rSgF30Y80N5g&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/8UDyzX1prjY/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLAAqwGiHNTs1EMUKtNe_D_8UlnjSw&usqp=CCk",
         "height": 608,
         "width": 405
       }
     ],
     "ie_key": "Youtube",
-    "id": "Mf4HKADeJ04",
+    "id": "8UDyzX1prjY",
     "_type": "url",
-    "url": "https://www.youtube.com/shorts/Mf4HKADeJ04",
+    "url": "https://www.youtube.com/shorts/8UDyzX1prjY",
     "__x_forwarded_for_ip": null,
-    "webpage_url": "https://www.youtube.com/shorts/Mf4HKADeJ04",
-    "original_url": "https://www.youtube.com/shorts/Mf4HKADeJ04",
-    "webpage_url_basename": "Mf4HKADeJ04",
+    "webpage_url": "https://www.youtube.com/shorts/8UDyzX1prjY",
+    "original_url": "https://www.youtube.com/shorts/8UDyzX1prjY",
+    "webpage_url_basename": "8UDyzX1prjY",
     "webpage_url_domain": "youtube.com",
     "extractor": "youtube",
     "extractor_key": "Youtube",
@@ -130,11 +178,11 @@
     "playlist_channel": "Wilderness Cuisine",
     "playlist_channel_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
     "playlist_webpage_url": "https://www.youtube.com/@WildernessChefCuisine/shorts?sp=CAMSAhAB",
-    "n_entries": 9,
-    "playlist_index": 5,
-    "__last_playlist_index": 10,
+    "n_entries": 13,
+    "playlist_index": 16,
+    "__last_playlist_index": 25,
     "playlist_autonumber": 4,
-    "epoch": 1782306604,
+    "epoch": 1784122199,
     "release_year": null,
     "_version": {
       "version": "2026.06.09",
@@ -144,28 +192,28 @@
     }
   },
   {
-    "title": "Cooking Chicken with a 1000-Degree STRAW FIRE! 🔥🌾🍗",
-    "view_count": 106000,
+    "title": "Slow Cooked Wild Oxtail 🌲🥩",
+    "view_count": 47000,
     "thumbnails": [
       {
-        "url": "https://i.ytimg.com/vi/IXqlEn4sLa8/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLDFFNMBsdw9kkLSQeK2RpN_bakiuA&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/cU8d62EDTSk/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLDQoGNluA9luu1t-scz5miNIdo_MA&usqp=CCk",
         "height": 720,
         "width": 405
       },
       {
-        "url": "https://i.ytimg.com/vi/IXqlEn4sLa8/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLBxe0sKcNE_B0mQ5YlR6Ma7hWvUgA&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/cU8d62EDTSk/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLByNIWstdicTo1f5zpSfggsjNtcyg&usqp=CCk",
         "height": 608,
         "width": 405
       }
     ],
     "ie_key": "Youtube",
-    "id": "IXqlEn4sLa8",
+    "id": "cU8d62EDTSk",
     "_type": "url",
-    "url": "https://www.youtube.com/shorts/IXqlEn4sLa8",
+    "url": "https://www.youtube.com/shorts/cU8d62EDTSk",
     "__x_forwarded_for_ip": null,
-    "webpage_url": "https://www.youtube.com/shorts/IXqlEn4sLa8",
-    "original_url": "https://www.youtube.com/shorts/IXqlEn4sLa8",
-    "webpage_url_basename": "IXqlEn4sLa8",
+    "webpage_url": "https://www.youtube.com/shorts/cU8d62EDTSk",
+    "original_url": "https://www.youtube.com/shorts/cU8d62EDTSk",
+    "webpage_url_basename": "cU8d62EDTSk",
     "webpage_url_domain": "youtube.com",
     "extractor": "youtube",
     "extractor_key": "Youtube",
@@ -178,11 +226,11 @@
     "playlist_channel": "Wilderness Cuisine",
     "playlist_channel_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
     "playlist_webpage_url": "https://www.youtube.com/@WildernessChefCuisine/shorts?sp=CAMSAhAB",
-    "n_entries": 9,
-    "playlist_index": 6,
-    "__last_playlist_index": 10,
+    "n_entries": 13,
+    "playlist_index": 17,
+    "__last_playlist_index": 25,
     "playlist_autonumber": 5,
-    "epoch": 1782306604,
+    "epoch": 1784122199,
     "release_year": null,
     "_version": {
       "version": "2026.06.09",
@@ -192,28 +240,28 @@
     }
   },
   {
-    "title": "CHICKEN IN A LOG! 🪵🍗🔥 / KÜTÜK İÇİNDE TAVUK",
-    "view_count": 2000000,
+    "title": "Meat in ORANGES? 🍊🥩 (Nature's Secret Aromatic) 🔥",
+    "view_count": 614000,
     "thumbnails": [
       {
-        "url": "https://i.ytimg.com/vi/BzYcSErNA6E/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLAt8ga1aUzUjMPq4bcEkOXigSCV5g&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/f6pBigFXPdY/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLC-3vWPFG0GbVKJ6XLmI7XIIiarUA&usqp=CCk",
         "height": 720,
         "width": 405
       },
       {
-        "url": "https://i.ytimg.com/vi/BzYcSErNA6E/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLDe3x1kkyGMADbMlfTZ1EcakFM1rg&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/f6pBigFXPdY/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLCDevJ85QkzvNEqZCN9hTksmM7AVw&usqp=CCk",
         "height": 608,
         "width": 405
       }
     ],
     "ie_key": "Youtube",
-    "id": "BzYcSErNA6E",
+    "id": "f6pBigFXPdY",
     "_type": "url",
-    "url": "https://www.youtube.com/shorts/BzYcSErNA6E",
+    "url": "https://www.youtube.com/shorts/f6pBigFXPdY",
     "__x_forwarded_for_ip": null,
-    "webpage_url": "https://www.youtube.com/shorts/BzYcSErNA6E",
-    "original_url": "https://www.youtube.com/shorts/BzYcSErNA6E",
-    "webpage_url_basename": "BzYcSErNA6E",
+    "webpage_url": "https://www.youtube.com/shorts/f6pBigFXPdY",
+    "original_url": "https://www.youtube.com/shorts/f6pBigFXPdY",
+    "webpage_url_basename": "f6pBigFXPdY",
     "webpage_url_domain": "youtube.com",
     "extractor": "youtube",
     "extractor_key": "Youtube",
@@ -226,11 +274,11 @@
     "playlist_channel": "Wilderness Cuisine",
     "playlist_channel_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
     "playlist_webpage_url": "https://www.youtube.com/@WildernessChefCuisine/shorts?sp=CAMSAhAB",
-    "n_entries": 9,
-    "playlist_index": 7,
-    "__last_playlist_index": 10,
+    "n_entries": 13,
+    "playlist_index": 18,
+    "__last_playlist_index": 25,
     "playlist_autonumber": 6,
-    "epoch": 1782306604,
+    "epoch": 1784122199,
     "release_year": null,
     "_version": {
       "version": "2026.06.09",
@@ -240,28 +288,28 @@
     }
   },
   {
-    "title": "​The 10-Hour BONE SLIDE! 🍖❄️ - Dana incik",
-    "view_count": 11000000,
+    "title": "​🍆 EGGPLANT ROLLS / Primitive Fire Rolling",
+    "view_count": 2100000,
     "thumbnails": [
       {
-        "url": "https://i.ytimg.com/vi/VdBO5hWxPWo/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLDfvDiy1JJTyPY6q1fw7yuPoLkz-Q&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/tv4OV7dSidA/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLChtqiXU3pmO_vQU9IqtAZ09kNGMg&usqp=CCk",
         "height": 720,
         "width": 405
       },
       {
-        "url": "https://i.ytimg.com/vi/VdBO5hWxPWo/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLBNL7uRmzVa2d_DwxFbDZixkPofjg&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/tv4OV7dSidA/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLCZMMPR6K8-Z-CxFFK2s4gbPZfp2g&usqp=CCk",
         "height": 608,
         "width": 405
       }
     ],
     "ie_key": "Youtube",
-    "id": "VdBO5hWxPWo",
+    "id": "tv4OV7dSidA",
     "_type": "url",
-    "url": "https://www.youtube.com/shorts/VdBO5hWxPWo",
+    "url": "https://www.youtube.com/shorts/tv4OV7dSidA",
     "__x_forwarded_for_ip": null,
-    "webpage_url": "https://www.youtube.com/shorts/VdBO5hWxPWo",
-    "original_url": "https://www.youtube.com/shorts/VdBO5hWxPWo",
-    "webpage_url_basename": "VdBO5hWxPWo",
+    "webpage_url": "https://www.youtube.com/shorts/tv4OV7dSidA",
+    "original_url": "https://www.youtube.com/shorts/tv4OV7dSidA",
+    "webpage_url_basename": "tv4OV7dSidA",
     "webpage_url_domain": "youtube.com",
     "extractor": "youtube",
     "extractor_key": "Youtube",
@@ -274,11 +322,11 @@
     "playlist_channel": "Wilderness Cuisine",
     "playlist_channel_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
     "playlist_webpage_url": "https://www.youtube.com/@WildernessChefCuisine/shorts?sp=CAMSAhAB",
-    "n_entries": 9,
-    "playlist_index": 8,
-    "__last_playlist_index": 10,
+    "n_entries": 13,
+    "playlist_index": 19,
+    "__last_playlist_index": 25,
     "playlist_autonumber": 7,
-    "epoch": 1782306604,
+    "epoch": 1784122199,
     "release_year": null,
     "_version": {
       "version": "2026.06.09",
@@ -288,28 +336,28 @@
     }
   },
   {
-    "title": "Fire Roasted Chicken! 🔥🍗✨",
-    "view_count": 146000,
+    "title": "The Ultimate Mountain TURKEY! Cooked in a BARREL 🛢️🦃🔥",
+    "view_count": 3600000,
     "thumbnails": [
       {
-        "url": "https://i.ytimg.com/vi/peJ8F5Xbz1M/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLC33FCy-KbjdnaLH6qqaqEpgYIkrQ&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/gBZQ28GIyLg/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLDU7PT14RsYP1_dGxlKbg4c7HvWRQ&usqp=CCk",
         "height": 720,
         "width": 405
       },
       {
-        "url": "https://i.ytimg.com/vi/peJ8F5Xbz1M/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLAXJGLkMilYjGJ1E7z5m8wKqCYg2w&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/gBZQ28GIyLg/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLBl1UnLZdI_mjbPY0YJKaqRzo9idA&usqp=CCk",
         "height": 608,
         "width": 405
       }
     ],
     "ie_key": "Youtube",
-    "id": "peJ8F5Xbz1M",
+    "id": "gBZQ28GIyLg",
     "_type": "url",
-    "url": "https://www.youtube.com/shorts/peJ8F5Xbz1M",
+    "url": "https://www.youtube.com/shorts/gBZQ28GIyLg",
     "__x_forwarded_for_ip": null,
-    "webpage_url": "https://www.youtube.com/shorts/peJ8F5Xbz1M",
-    "original_url": "https://www.youtube.com/shorts/peJ8F5Xbz1M",
-    "webpage_url_basename": "peJ8F5Xbz1M",
+    "webpage_url": "https://www.youtube.com/shorts/gBZQ28GIyLg",
+    "original_url": "https://www.youtube.com/shorts/gBZQ28GIyLg",
+    "webpage_url_basename": "gBZQ28GIyLg",
     "webpage_url_domain": "youtube.com",
     "extractor": "youtube",
     "extractor_key": "Youtube",
@@ -322,11 +370,11 @@
     "playlist_channel": "Wilderness Cuisine",
     "playlist_channel_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
     "playlist_webpage_url": "https://www.youtube.com/@WildernessChefCuisine/shorts?sp=CAMSAhAB",
-    "n_entries": 9,
-    "playlist_index": 9,
-    "__last_playlist_index": 10,
+    "n_entries": 13,
+    "playlist_index": 20,
+    "__last_playlist_index": 25,
     "playlist_autonumber": 8,
-    "epoch": 1782306604,
+    "epoch": 1784122199,
     "release_year": null,
     "_version": {
       "version": "2026.06.09",
@@ -336,28 +384,28 @@
     }
   },
   {
-    "title": "WILD DUCK STEW In a Blizzard! 🦆❄️ (Warmer Than Any Fire)",
-    "view_count": 4800000,
+    "title": "FIRE-KISSED Chicken & Fresh Bread! (No Oven) 🍗🍞🔥",
+    "view_count": 26000,
     "thumbnails": [
       {
-        "url": "https://i.ytimg.com/vi/tVdiTs8CffM/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLB3ROV3FIx7mybYlL7HopStXBzUSA&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/SmOo1Vv-4bM/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLABUD6X7NQ9NZ7tBrd86_3Uvwx_cQ&usqp=CCk",
         "height": 720,
         "width": 405
       },
       {
-        "url": "https://i.ytimg.com/vi/tVdiTs8CffM/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLClgX_QBr32CwDsNBAEmlew5gP96g&usqp=CCk",
+        "url": "https://i.ytimg.com/vi/SmOo1Vv-4bM/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLBqj11IuY-ms1SDSgj7tQu2Ckknvg&usqp=CCk",
         "height": 608,
         "width": 405
       }
     ],
     "ie_key": "Youtube",
-    "id": "tVdiTs8CffM",
+    "id": "SmOo1Vv-4bM",
     "_type": "url",
-    "url": "https://www.youtube.com/shorts/tVdiTs8CffM",
+    "url": "https://www.youtube.com/shorts/SmOo1Vv-4bM",
     "__x_forwarded_for_ip": null,
-    "webpage_url": "https://www.youtube.com/shorts/tVdiTs8CffM",
-    "original_url": "https://www.youtube.com/shorts/tVdiTs8CffM",
-    "webpage_url_basename": "tVdiTs8CffM",
+    "webpage_url": "https://www.youtube.com/shorts/SmOo1Vv-4bM",
+    "original_url": "https://www.youtube.com/shorts/SmOo1Vv-4bM",
+    "webpage_url_basename": "SmOo1Vv-4bM",
     "webpage_url_domain": "youtube.com",
     "extractor": "youtube",
     "extractor_key": "Youtube",
@@ -370,11 +418,203 @@
     "playlist_channel": "Wilderness Cuisine",
     "playlist_channel_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
     "playlist_webpage_url": "https://www.youtube.com/@WildernessChefCuisine/shorts?sp=CAMSAhAB",
-    "n_entries": 9,
-    "playlist_index": 10,
-    "__last_playlist_index": 10,
+    "n_entries": 13,
+    "playlist_index": 21,
+    "__last_playlist_index": 25,
     "playlist_autonumber": 9,
-    "epoch": 1782306604,
+    "epoch": 1784122199,
+    "release_year": null,
+    "_version": {
+      "version": "2026.06.09",
+      "current_git_head": null,
+      "release_git_head": "821bef0f00178916d60dbc86bc0bcb8cc3bae8d5",
+      "repository": "yt-dlp/yt-dlp"
+    }
+  },
+  {
+    "title": "The Most PERFECT Crust You'll Ever See! 🍗🤤",
+    "view_count": 37000,
+    "thumbnails": [
+      {
+        "url": "https://i.ytimg.com/vi/X62ZVeWQCdE/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLAigvlt1Ev7z9H3r7-qk8G-8ffmQg&usqp=CCk",
+        "height": 720,
+        "width": 405
+      },
+      {
+        "url": "https://i.ytimg.com/vi/X62ZVeWQCdE/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLCggrcdGtpqevYp6IHKp8Jp6wT2WA&usqp=CCk",
+        "height": 608,
+        "width": 405
+      }
+    ],
+    "ie_key": "Youtube",
+    "id": "X62ZVeWQCdE",
+    "_type": "url",
+    "url": "https://www.youtube.com/shorts/X62ZVeWQCdE",
+    "__x_forwarded_for_ip": null,
+    "webpage_url": "https://www.youtube.com/shorts/X62ZVeWQCdE",
+    "original_url": "https://www.youtube.com/shorts/X62ZVeWQCdE",
+    "webpage_url_basename": "X62ZVeWQCdE",
+    "webpage_url_domain": "youtube.com",
+    "extractor": "youtube",
+    "extractor_key": "Youtube",
+    "playlist_count": null,
+    "playlist": "Wilderness Cuisine - Shorts",
+    "playlist_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
+    "playlist_title": "Wilderness Cuisine - Shorts",
+    "playlist_uploader": "Wilderness Cuisine",
+    "playlist_uploader_id": "@WildernessChefCuisine",
+    "playlist_channel": "Wilderness Cuisine",
+    "playlist_channel_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
+    "playlist_webpage_url": "https://www.youtube.com/@WildernessChefCuisine/shorts?sp=CAMSAhAB",
+    "n_entries": 13,
+    "playlist_index": 22,
+    "__last_playlist_index": 25,
+    "playlist_autonumber": 10,
+    "epoch": 1784122199,
+    "release_year": null,
+    "_version": {
+      "version": "2026.06.09",
+      "current_git_head": null,
+      "release_git_head": "821bef0f00178916d60dbc86bc0bcb8cc3bae8d5",
+      "repository": "yt-dlp/yt-dlp"
+    }
+  },
+  {
+    "title": "Why NAILS in a Chicken? (Bucket Secret) 🤯🪣",
+    "view_count": 15000,
+    "thumbnails": [
+      {
+        "url": "https://i.ytimg.com/vi/D_uYAvKq-bA/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLDLfMpnyh8x2C54QqhVxe8DRlB8ag&usqp=CCk",
+        "height": 720,
+        "width": 405
+      },
+      {
+        "url": "https://i.ytimg.com/vi/D_uYAvKq-bA/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLCBMp4ZZQqdz7U4p6aMVU907WQmxQ&usqp=CCk",
+        "height": 608,
+        "width": 405
+      }
+    ],
+    "ie_key": "Youtube",
+    "id": "D_uYAvKq-bA",
+    "_type": "url",
+    "url": "https://www.youtube.com/shorts/D_uYAvKq-bA",
+    "__x_forwarded_for_ip": null,
+    "webpage_url": "https://www.youtube.com/shorts/D_uYAvKq-bA",
+    "original_url": "https://www.youtube.com/shorts/D_uYAvKq-bA",
+    "webpage_url_basename": "D_uYAvKq-bA",
+    "webpage_url_domain": "youtube.com",
+    "extractor": "youtube",
+    "extractor_key": "Youtube",
+    "playlist_count": null,
+    "playlist": "Wilderness Cuisine - Shorts",
+    "playlist_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
+    "playlist_title": "Wilderness Cuisine - Shorts",
+    "playlist_uploader": "Wilderness Cuisine",
+    "playlist_uploader_id": "@WildernessChefCuisine",
+    "playlist_channel": "Wilderness Cuisine",
+    "playlist_channel_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
+    "playlist_webpage_url": "https://www.youtube.com/@WildernessChefCuisine/shorts?sp=CAMSAhAB",
+    "n_entries": 13,
+    "playlist_index": 23,
+    "__last_playlist_index": 25,
+    "playlist_autonumber": 11,
+    "epoch": 1784122199,
+    "release_year": null,
+    "_version": {
+      "version": "2026.06.09",
+      "current_git_head": null,
+      "release_git_head": "821bef0f00178916d60dbc86bc0bcb8cc3bae8d5",
+      "repository": "yt-dlp/yt-dlp"
+    }
+  },
+  {
+    "title": "HUGE Pizza in a POT! (Nature's Secret Oven) 🍕🔥",
+    "view_count": 31000,
+    "thumbnails": [
+      {
+        "url": "https://i.ytimg.com/vi/OxNs9Z5e5lM/oardefault.jpg?sqp=-oaymwEdCJkDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLCAhtJwcLRTkJSW2x0QbEYkwmAV_A&usqp=CCk",
+        "height": 720,
+        "width": 409
+      },
+      {
+        "url": "https://i.ytimg.com/vi/OxNs9Z5e5lM/oardefault.jpg?sqp=-oaymwEgCJkDEOYESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLBATGf0A_xhcxlVbfRoZp2wKiatFw&usqp=CCk",
+        "height": 614,
+        "width": 409
+      }
+    ],
+    "ie_key": "Youtube",
+    "id": "OxNs9Z5e5lM",
+    "_type": "url",
+    "url": "https://www.youtube.com/shorts/OxNs9Z5e5lM",
+    "__x_forwarded_for_ip": null,
+    "webpage_url": "https://www.youtube.com/shorts/OxNs9Z5e5lM",
+    "original_url": "https://www.youtube.com/shorts/OxNs9Z5e5lM",
+    "webpage_url_basename": "OxNs9Z5e5lM",
+    "webpage_url_domain": "youtube.com",
+    "extractor": "youtube",
+    "extractor_key": "Youtube",
+    "playlist_count": null,
+    "playlist": "Wilderness Cuisine - Shorts",
+    "playlist_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
+    "playlist_title": "Wilderness Cuisine - Shorts",
+    "playlist_uploader": "Wilderness Cuisine",
+    "playlist_uploader_id": "@WildernessChefCuisine",
+    "playlist_channel": "Wilderness Cuisine",
+    "playlist_channel_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
+    "playlist_webpage_url": "https://www.youtube.com/@WildernessChefCuisine/shorts?sp=CAMSAhAB",
+    "n_entries": 13,
+    "playlist_index": 24,
+    "__last_playlist_index": 25,
+    "playlist_autonumber": 12,
+    "epoch": 1784122199,
+    "release_year": null,
+    "_version": {
+      "version": "2026.06.09",
+      "current_git_head": null,
+      "release_git_head": "821bef0f00178916d60dbc86bc0bcb8cc3bae8d5",
+      "repository": "yt-dlp/yt-dlp"
+    }
+  },
+  {
+    "title": "Stop Grilling Eggplant. Do THIS instead! 🤯🍆",
+    "view_count": 104000,
+    "thumbnails": [
+      {
+        "url": "https://i.ytimg.com/vi/askNeIfYEl0/oardefault.jpg?sqp=-oaymwEdCJUDENAFSFWQAgHyq4qpAwwIARUAAIhCcAHAAQY=&rs=AOn4CLBBPNhXIeu_p2XdFMv0uu78B1WZNg&usqp=CCk",
+        "height": 720,
+        "width": 405
+      },
+      {
+        "url": "https://i.ytimg.com/vi/askNeIfYEl0/oardefault.jpg?sqp=-oaymwEgCJUDEOAESFWQAgHyq4qpAw8IARUAAIhCcAHAAQbIAQE=&rs=AOn4CLBIlLYQeUKQLTNWlTPZOGuVFrjezw&usqp=CCk",
+        "height": 608,
+        "width": 405
+      }
+    ],
+    "ie_key": "Youtube",
+    "id": "askNeIfYEl0",
+    "_type": "url",
+    "url": "https://www.youtube.com/shorts/askNeIfYEl0",
+    "__x_forwarded_for_ip": null,
+    "webpage_url": "https://www.youtube.com/shorts/askNeIfYEl0",
+    "original_url": "https://www.youtube.com/shorts/askNeIfYEl0",
+    "webpage_url_basename": "askNeIfYEl0",
+    "webpage_url_domain": "youtube.com",
+    "extractor": "youtube",
+    "extractor_key": "Youtube",
+    "playlist_count": null,
+    "playlist": "Wilderness Cuisine - Shorts",
+    "playlist_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
+    "playlist_title": "Wilderness Cuisine - Shorts",
+    "playlist_uploader": "Wilderness Cuisine",
+    "playlist_uploader_id": "@WildernessChefCuisine",
+    "playlist_channel": "Wilderness Cuisine",
+    "playlist_channel_id": "UC97_SZzxzFkR1_ZtgAiFIoQ",
+    "playlist_webpage_url": "https://www.youtube.com/@WildernessChefCuisine/shorts?sp=CAMSAhAB",
+    "n_entries": 13,
+    "playlist_index": 25,
+    "__last_playlist_index": 25,
+    "playlist_autonumber": 13,
+    "epoch": 1784122199,
     "release_year": null,
     "_version": {
       "version": "2026.06.09",

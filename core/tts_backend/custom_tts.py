@@ -58,11 +58,15 @@ def handle_index_tts(text, save_path):
 
     print(f"🎙️ IndexTTS2 [{ref_type}] -> {Path(save_path).name}")
     
+    testPath = "D:\videosoftware\20260323\remote\VideoLingo_IndexTTS\VideoLingo\core\test\spk_1783163011.wav"
+
     client = Client(url)
     result = client.predict(
         emo_control_method="与音色参考音频相同",
+        # prompt=handle_file(ref_path),
         prompt=handle_file(ref_path),
         text=text,
+        # emo_ref_path=handle_file(ref_path),
         emo_ref_path=handle_file(ref_path),
         emo_weight=0.65,
         vec1=0, vec2=0, vec3=0, vec4=0, vec5=0, vec6=0, vec7=0, vec8=0,

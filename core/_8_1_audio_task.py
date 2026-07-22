@@ -11,6 +11,7 @@ from core.utils.models import *
 console = Console()
 speed_factor = load_key("speed_factor")
 
+
 TRANS_SUBS_FOR_AUDIO_FILE = 'output/audio/trans_subs_for_audio.srt'
 SRC_SUBS_FOR_AUDIO_FILE = 'output/audio/src_subs_for_audio.srt'
 ESTIMATOR = None
