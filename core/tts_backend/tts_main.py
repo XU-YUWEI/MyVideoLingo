@@ -22,7 +22,10 @@ def clean_text_for_tts(text):
         text = text.replace(char, '')
     return text.strip()
 
-def tts_main(text, save_as, number, task_df):
+def tts_main(text, save_as, number, task_df, ref_choice=None):
+    """
+    ref_choice: 可选 '1' 或 '2'，指定使用哪个用户上传的参考音频（仅 custom_tts 有效）
+    """
     text = clean_text_for_tts(text)
     # Check if text is empty or single character, single character voiceovers are prone to bugs
     cleaned_text = re.sub(r'[^\w\s]', '', text).strip()
@@ -60,7 +63,7 @@ def tts_main(text, save_as, number, task_df):
                 edge_tts(text, save_as)
             # --- 修改这一部分：让它支持你新加的两个引擎名称 ---
             elif TTS_METHOD in ['custom_tts', 'IndexTTS2', 'Fish-Speech']:
-                custom_tts(text, save_as)
+                custom_tts(text, save_as, ref_choice=ref_choice)
             elif TTS_METHOD == 'sf_cosyvoice2':
                 cosyvoice_tts_for_videolingo(text, save_as, number, task_df)
             elif TTS_METHOD == 'f5tts':

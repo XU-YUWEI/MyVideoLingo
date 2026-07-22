@@ -10,6 +10,7 @@
 import os
 import sys
 import base64
+import shutil
 from io import BytesIO
 from typing import Optional
 
@@ -35,9 +36,13 @@ st.set_page_config(
 )
 
 # ── 常量 ─────────────────────────────────────────────────────
-TASKS_FILE = _8_1_AUDIO_TASK  # "output/audio/tts_tasks.xlsx"
-TEMP_DIR = _AUDIO_TMP_DIR      # "output/audio/tmp"
-SEGS_DIR = _AUDIO_SEGS_DIR     # "output/audio/segs"
+TASKS_FILE = _8_1_AUDIO_TASK           # "output/audio/tts_tasks.xlsx"
+TEMP_DIR = _AUDIO_TMP_DIR                # "output/audio/tmp"
+SEGS_DIR = _AUDIO_SEGS_DIR               # "output/audio/segs"
+USER_REF_DIR = os.path.join("output", "audio")  # 用户上传参考音频保存目录
+# ── 用户上传参考音频的文件路径 ──
+USER_REF_1_PATH = os.path.join(USER_REF_DIR, "user_ref1.wav")
+USER_REF_2_PATH = os.path.join(USER_REF_DIR, "user_ref2.wav")
 
 
 # ── 辅助函数 ─────────────────────────────────────────────────
@@ -50,6 +55,8 @@ def _cached_load_tasks() -> pd.DataFrame:
         df['lines'] = None
     if 'src_lines' not in df.columns:
         df['src_lines'] = None
+    if 'ref_choice' not in df.columns:
+        df['ref_choice'] = '1'
     return df
 
 
@@ -115,19 +122,22 @@ def get_segment_status(number: int, lines_list: list) -> tuple:
     return all_generated, audio_paths, combined
 
 
-def dub_single_segment(number: int, lines_list: list, tasks_df: pd.DataFrame) -> bool:
-    """为单个配音片段生成 TTS 音频"""
+def dub_single_segment(number: int, lines_list: list, tasks_df: pd.DataFrame, ref_choice: str = '1') -> bool:
+    """为单个配音片段生成 TTS 音频（如文件已存在则跳过）"""
     os.makedirs(TEMP_DIR, exist_ok=True)
     success = True
     progress_bar = st.progress(0, text=f"正在生成片段 {number} 的音频...")
 
+    ref_label = f"参考{ref_choice}" if ref_choice in ('1', '2') else "默认参考"
+    st.toast(f"片段 #{number}: 使用 {ref_label}")
+
     for line_idx, line in enumerate(lines_list):
         temp_file = os.path.join(TEMP_DIR, f"{number}_{line_idx}_temp.wav")
         try:
-            tts_main(line, temp_file, number, tasks_df)
+            tts_main(line, temp_file, number, tasks_df, ref_choice=ref_choice)
             progress_bar.progress(
                 (line_idx + 1) / len(lines_list),
-                text=f"片段 {number}: 第 {line_idx + 1}/{len(lines_list)} 行完成",
+                text=f"片段 {number}: 第 {line_idx + 1}/{len(lines_list)} 行完成 [{ref_label}]",
             )
         except Exception as e:
             st.error(f"片段 {number} 第 {line_idx + 1} 行配音失败: {e}")
@@ -136,6 +146,35 @@ def dub_single_segment(number: int, lines_list: list, tasks_df: pd.DataFrame) ->
 
     progress_bar.empty()
     return success
+
+
+def redub_single_segment(number: int, lines_list: list, tasks_df: pd.DataFrame, ref_choice: str = '1') -> bool:
+    """重新配音：先删除旧音频文件，再重新生成"""
+    # 先删除已有的音频文件
+    delete_count = delete_segment_audio(number, lines_list)
+    if delete_count > 0:
+        st.toast(f"已删除 {delete_count} 个旧音频文件")
+    # 再重新生成
+    return dub_single_segment(number, lines_list, tasks_df, ref_choice=ref_choice)
+
+
+def delete_segment_audio(number: int, lines_list: list) -> int:
+    """删除指定片段的音频文件（含 tmp 临时文件和 segs 最终文件）"""
+    os.makedirs(TEMP_DIR, exist_ok=True)
+    os.makedirs(SEGS_DIR, exist_ok=True)
+    deleted = 0
+    for line_idx in range(len(lines_list)):
+        # 临时文件
+        tmp_path = os.path.join(TEMP_DIR, f"{number}_{line_idx}_temp.wav")
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+            deleted += 1
+        # 最终文件
+        seg_path = os.path.join(SEGS_DIR, f"{number}_{line_idx}.wav")
+        if os.path.exists(seg_path):
+            os.remove(seg_path)
+            deleted += 1
+    return deleted
 
 
 def get_audio_player(audio_buf: BytesIO) -> str:
@@ -153,10 +192,112 @@ def format_time_display(seconds: float) -> str:
     return f"{m:02d}:{s:05.2f}"
 
 
+def save_uploaded_ref_file(uploaded_file, ref_num: int) -> Optional[str]:
+    """
+    保存用户上传的参考音频/视频文件为 wav 格式。
+    ref_num: 1 或 2
+    返回保存后的路径，失败返回 None。
+    """
+    save_path = os.path.join(USER_REF_DIR, f"user_ref{ref_num}.wav")
+    os.makedirs(USER_REF_DIR, exist_ok=True)
+
+    try:
+        # 尝试用 pydub 直接加载（支持 mp3/wav/flac/ogg 等音频格式）
+        audio = AudioSegment.from_file(uploaded_file)
+        audio.export(save_path, format="wav")
+        return save_path
+    except Exception as audio_err:
+        # 如果 pydub 直接加载失败，可能是视频文件，尝试用 ffmpeg 提取音频
+        try:
+            import subprocess as sp
+            temp_input = os.path.join(USER_REF_DIR, f"_temp_ref{ref_num}_input")
+            with open(temp_input, 'wb') as f:
+                f.write(uploaded_file.getbuffer())
+            sp.run(
+                ["ffmpeg", "-y", "-i", temp_input, "-vn", "-acodec", "pcm_s16le",
+                 "-ar", "44100", "-ac", "1", save_path],
+                capture_output=True, check=True
+            )
+            os.remove(temp_input)
+            return save_path
+        except Exception as ffmpeg_err:
+            st.error(f"❌ 无法处理上传的参考{ref_num}文件: {audio_err} / ffmpeg: {ffmpeg_err}")
+            return None
+
+
+def get_ref_status() -> dict:
+    """返回两个参考音频的状态字典"""
+    ref1_exists = os.path.exists(USER_REF_1_PATH)
+    ref2_exists = os.path.exists(USER_REF_2_PATH)
+    ref1_size = os.path.getsize(USER_REF_1_PATH) if ref1_exists else 0
+    ref2_size = os.path.getsize(USER_REF_2_PATH) if ref2_exists else 0
+    return {
+        '1': {'exists': ref1_exists, 'size_kb': ref1_size / 1024},
+        '2': {'exists': ref2_exists, 'size_kb': ref2_size / 1024},
+    }
+
+
 # ── 主页面 ───────────────────────────────────────────────────
 
 def main():
     st.title("🎤 逐行配音")
+    st.markdown("---")
+
+    # ── 参考音频上传区 ──
+    with st.expander("🎵 参考音频设置（上传两个参考音频/视频，每段配音可选择使用哪一个）", expanded=False):
+        ref_status = get_ref_status()
+        ref_col1, ref_col2 = st.columns(2)
+
+        with ref_col1:
+            st.markdown("**参考音频 1**")
+            ref1_ok = ref_status['1']['exists']
+            if ref1_ok:
+                st.success(f"✅ 已上传 ({ref_status['1']['size_kb']:.1f} KB)")
+                if st.button("🗑️ 清除参考1", key="clear_ref1"):
+                    if os.path.exists(USER_REF_1_PATH):
+                        os.remove(USER_REF_1_PATH)
+                        st.cache_data.clear()
+                        st.rerun()
+            else:
+                st.warning("❌ 未上传")
+            uploaded_1 = st.file_uploader(
+                "上传参考音频/视频 1",
+                type=['wav', 'mp3', 'flac', 'ogg', 'mp4', 'avi', 'mov', 'mkv'],
+                key="ref_upload_1",
+                label_visibility="collapsed",
+            )
+            if uploaded_1 is not None:
+                path = save_uploaded_ref_file(uploaded_1, 1)
+                if path:
+                    st.success(f"✅ 参考1 已保存: {path}")
+                    st.cache_data.clear()
+                    st.rerun()
+
+        with ref_col2:
+            st.markdown("**参考音频 2**")
+            ref2_ok = ref_status['2']['exists']
+            if ref2_ok:
+                st.success(f"✅ 已上传 ({ref_status['2']['size_kb']:.1f} KB)")
+                if st.button("🗑️ 清除参考2", key="clear_ref2"):
+                    if os.path.exists(USER_REF_2_PATH):
+                        os.remove(USER_REF_2_PATH)
+                        st.cache_data.clear()
+                        st.rerun()
+            else:
+                st.warning("❌ 未上传")
+            uploaded_2 = st.file_uploader(
+                "上传参考音频/视频 2",
+                type=['wav', 'mp3', 'flac', 'ogg', 'mp4', 'avi', 'mov', 'mkv'],
+                key="ref_upload_2",
+                label_visibility="collapsed",
+            )
+            if uploaded_2 is not None:
+                path = save_uploaded_ref_file(uploaded_2, 2)
+                if path:
+                    st.success(f"✅ 参考2 已保存: {path}")
+                    st.cache_data.clear()
+                    st.rerun()
+
     st.markdown("---")
 
     # 步骤1: 检查任务文件是否存在
@@ -246,9 +387,12 @@ def main():
                     for idx, row in df.iterrows():
                         number = row['number']
                         lines_list = parse_lines(row['lines'])
+                        seg_ref = str(row.get('ref_choice', '1'))
+                        if seg_ref not in ('1', '2'):
+                            seg_ref = '1'
                         generated, _, _ = get_segment_status(number, lines_list)
                         if not generated and lines_list:
-                            ok = dub_single_segment(number, lines_list, df)
+                            ok = dub_single_segment(number, lines_list, df, ref_choice=seg_ref)
                             if ok:
                                 success_count += 1
                             else:
@@ -320,6 +464,9 @@ def main():
         lines_list = parse_lines(row['lines'])
         src_lines_list = parse_lines(row['src_lines'])
         cut_off = row.get('cut_off', 0)
+        ref_choice = str(row.get('ref_choice', '1'))
+        if ref_choice not in ('1', '2'):
+            ref_choice = '1'
 
         # 检查音频状态
         all_generated, audio_paths, combined_audio = get_segment_status(number, lines_list)
@@ -381,23 +528,88 @@ def main():
                 with col_trans:
                     st.markdown("**🌐 译文 (lines):**")
                     if lines_list:
-                        for i, ll in enumerate(lines_list):
-                            st.markdown(f">  [{i + 1}] {ll}")
+                        # 使用 st.form 包裹可编辑文本框，统一提交保存
+                        with st.form(key=f"trans_form_{number}"):
+                            edited_lines = []
+                            for i, ll in enumerate(lines_list):
+                                new_val = st.text_input(
+                                    f"第 {i + 1} 行",
+                                    value=ll,
+                                    key=f"trans_{number}_{i}",
+                                    label_visibility="collapsed",
+                                    placeholder="输入译文...",
+                                )
+                                edited_lines.append(new_val)
+
+                            if st.form_submit_button("💾 保存译文", use_container_width=True):
+                                try:
+                                    # 更新 DataFrame 中的 lines
+                                    df.at[idx, 'lines'] = str(edited_lines)
+                                    df.to_excel(TASKS_FILE, index=False)
+                                    st.cache_data.clear()
+                                    st.success(f"✅ 片段 #{number} 译文已保存！")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ 保存失败: {e}")
                     else:
                         st.caption("(空)")
 
+            # ── 参考音频选择 ──
+            ref_status = get_ref_status()
+            ref1_ok = ref_status['1']['exists']
+            ref2_ok = ref_status['2']['exists']
+
+            ref_row_col1, ref_row_col2 = st.columns([1, 4])
+            with ref_row_col1:
+                st.markdown("**🔊 参考音频:**")
+            with ref_row_col2:
+                # 构建可选项（仅显示已上传的参考）
+                ref_options = {}
+                if ref1_ok:
+                    ref_options['1'] = "参考 1 ✅"
+                if ref2_ok:
+                    ref_options['2'] = "参考 2 ✅"
+                if not ref_options:
+                    ref_options['1'] = "参考 1 ❌(未上传)"
+                    ref_options['2'] = "参考 2 ❌(未上传)"
+
+                current_index = 0
+                ref_keys = list(ref_options.keys())
+                if ref_choice in ref_keys:
+                    current_index = ref_keys.index(ref_choice)
+                else:
+                    current_index = 0
+
+                new_ref = st.selectbox(
+                    "选择参考音频",
+                    options=ref_keys,
+                    format_func=lambda x: ref_options.get(x, f"参考 {x}"),
+                    index=current_index,
+                    key=f"ref_select_{number}",
+                    label_visibility="collapsed",
+                )
+                # 如果选择发生变化，立即保存
+                if new_ref != ref_choice:
+                    try:
+                        df.at[idx, 'ref_choice'] = str(new_ref)
+                        df.to_excel(TASKS_FILE, index=False)
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"保存参考选择失败: {e}")
+
             # 操作区
-            op_col1, op_col2, op_col3 = st.columns([1, 2, 4])
+            op_col1, op_col2, op_col3, op_col4, op_col5 = st.columns([1, 1, 1, 2, 3])
 
             with op_col1:
-                # 单独配音按钮（关键功能）
+                # 配音（首次 / 覆盖）
                 dub_key = f"dub_{number}"
-                if st.button(f"🎤 单独配音", key=dub_key, use_container_width=True):
+                if st.button(f"🎤 配音", key=dub_key, use_container_width=True):
                     if not lines_list:
                         st.warning(f"片段 #{number} 没有需要配音的文本。")
                     else:
                         with st.spinner(f"正在为片段 #{number} 生成音频 ({len(lines_list)} 行)..."):
-                            ok = dub_single_segment(number, lines_list, df)
+                            ok = redub_single_segment(number, lines_list, df, ref_choice=ref_choice)
                             if ok:
                                 st.success(f"✅ 片段 #{number} 配音完成！")
                                 st.rerun()
@@ -405,6 +617,48 @@ def main():
                                 st.error(f"❌ 片段 #{number} 配音失败。")
 
             with op_col2:
+                # 重新配音（带确认）
+                redub_key = f"redub_{number}"
+                with st.popover("🔄 重新配音", use_container_width=True):
+                    st.markdown(f"**确认重新配音片段 #{number}？**")
+                    st.caption(f"将删除旧的音频文件并重新生成 {len(lines_list)} 行。使用参考: {ref_choice}")
+                    col_yes, col_no = st.columns(2)
+                    with col_yes:
+                        if st.button("✅ 确认", key=f"redub_confirm_{number}", use_container_width=True):
+                            if not lines_list:
+                                st.warning(f"片段 #{number} 没有需要配音的文本。")
+                            else:
+                                with st.spinner(f"正在重新配音片段 #{number} ({len(lines_list)} 行)..."):
+                                    ok = redub_single_segment(number, lines_list, df, ref_choice=ref_choice)
+                                    if ok:
+                                        st.success(f"✅ 片段 #{number} 重新配音完成！")
+                                        st.rerun()
+                                    else:
+                                        st.error(f"❌ 重新配音失败。")
+                    with col_no:
+                        if st.button("❌ 取消", key=f"redub_cancel_{number}", use_container_width=True):
+                            st.rerun()
+
+            with op_col3:
+                # 删除配音（带确认）
+                del_key = f"del_{number}"
+                with st.popover("🗑️ 删除配音", use_container_width=True):
+                    st.markdown(f"**确认删除片段 #{number} 的音频？**")
+                    st.caption("将删除该片段的所有临时文件和最终音频文件。")
+                    col_yes, col_no = st.columns(2)
+                    with col_yes:
+                        if st.button("✅ 确认删除", key=f"del_confirm_{number}", use_container_width=True):
+                            deleted = delete_segment_audio(number, lines_list)
+                            if deleted > 0:
+                                st.success(f"✅ 已删除 {deleted} 个音频文件")
+                            else:
+                                st.info("没有找到需要删除的音频文件")
+                            st.rerun()
+                    with col_no:
+                        if st.button("❌ 取消", key=f"del_cancel_{number}", use_container_width=True):
+                            st.rerun()
+
+            with op_col4:
                 # 播放音频
                 if all_generated and combined_audio:
                     audio_html = get_audio_player(combined_audio)
@@ -429,7 +683,7 @@ def main():
                 else:
                     st.caption("暂无音频")
 
-            with op_col3:
+            with op_col5:
                 # 显示每行音频时长信息
                 if all_generated and audio_paths:
                     durations = []
@@ -456,9 +710,13 @@ def main():
     # ── 底部提示 ──
     st.markdown("---")
     st.caption(
-        "💡 **提示**: 点击「单独配音」可为单个片段生成 TTS 音频（仅生成临时文件），"
-        "点击「配音全部」会执行完整管线（含变速合并）。"
-        "如果片段已配音，可直接在页面中播放预览。"
+        "💡 **操作说明**: "
+        "🎵 上传两个参考音频/视频后，每段配音可独立选择使用「参考1」或「参考2」；"
+        "🎤「配音」直接生成/覆盖音频；"
+        "🔄「重新配音」先删旧文件再重新生成（需确认）；"
+        "🗑️「删除配音」清除该片段所有音频文件（需确认）。"
+        "修改译文后记得点击「💾 保存译文」。"
+        "顶部「配音全部」会执行完整管线（含变速合并，使用系统配置的参考音频）。"
     )
 
 

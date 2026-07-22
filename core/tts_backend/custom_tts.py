@@ -4,11 +4,29 @@ from pathlib import Path
 from gradio_client import Client, handle_file
 from core.utils import load_key
 
-def get_ref_audio(method_prefix, save_path):
+# ── 用户上传参考音频的保存目录 ──
+USER_REF_DIR = os.path.join("output", "audio")
+
+
+def get_user_ref_path(ref_choice: str) -> str:
+    """根据 ref_choice ('1' 或 '2') 返回用户上传参考音频的完整路径"""
+    return os.path.join(USER_REF_DIR, f"user_ref{ref_choice}.wav")
+
+
+def get_ref_audio(method_prefix, save_path, ref_choice=None):
     """
     根据配置获取参考音频路径
     method_prefix: 'index_tts' 或 'fish_speech'
+    ref_choice: 可选 '1' 或 '2'，优先使用用户上传的参考音频
     """
+    # 如果指定了 ref_choice，优先使用用户上传的参考音频
+    if ref_choice in ('1', '2'):
+        user_path = get_user_ref_path(ref_choice)
+        if os.path.exists(user_path):
+            return user_path, f"用户参考{ref_choice}"
+        print(f"❌ 用户参考音频 {user_path} 不存在")
+        return None, None
+
     ref_mode = load_key(f"{method_prefix}.ref_mode")
     
     # 模式 2: 使用 UI 上传的固定参考音频
@@ -32,15 +50,19 @@ def get_ref_audio(method_prefix, save_path):
         
     return None, None
 
-def custom_tts(text, save_path):
+
+def custom_tts(text, save_path, ref_choice=None):
+    """
+    ref_choice: 可选 '1' 或 '2'，指定使用哪个用户上传的参考音频
+    """
     # 1. 获取当前选中的 TTS 方法
     method = load_key("tts_method")
     
     try:
         if method == "IndexTTS2":
-            return handle_index_tts(text, save_path)
+            return handle_index_tts(text, save_path, ref_choice=ref_choice)
         elif method == "Fish-Speech":
-            return handle_fish_speech(text, save_path)
+            return handle_fish_speech(text, save_path, ref_choice=ref_choice)
         else:
             print(f"❌ 未知的 TTS 方法: {method}")
             return False
@@ -48,25 +70,22 @@ def custom_tts(text, save_path):
         print(f"❌ {method} 运行异常: {str(e)}")
         return False
 
-def handle_index_tts(text, save_path):
+
+def handle_index_tts(text, save_path, ref_choice=None):
     url = load_key("index_tts.url") or "http://localhost:7860/"
-    ref_path, ref_type = get_ref_audio("index_tts", save_path)
+    ref_path, ref_type = get_ref_audio("index_tts", save_path, ref_choice=ref_choice)
     
     if not ref_path:
         print("❌ IndexTTS2 找不到任何参考音频")
         return False
 
     print(f"🎙️ IndexTTS2 [{ref_type}] -> {Path(save_path).name}")
-    
-    testPath = "D:\videosoftware\20260323\remote\VideoLingo_IndexTTS\VideoLingo\core\test\spk_1783163011.wav"
 
     client = Client(url)
     result = client.predict(
         emo_control_method="与音色参考音频相同",
-        # prompt=handle_file(ref_path),
         prompt=handle_file(ref_path),
         text=text,
-        # emo_ref_path=handle_file(ref_path),
         emo_ref_path=handle_file(ref_path),
         emo_weight=0.65,
         vec1=0, vec2=0, vec3=0, vec4=0, vec5=0, vec6=0, vec7=0, vec8=0,
@@ -82,9 +101,10 @@ def handle_index_tts(text, save_path):
     real_path = result.get('value') if isinstance(result, dict) else result
     return finalize_audio(real_path, save_path)
 
-def handle_fish_speech(text, save_path):
+
+def handle_fish_speech(text, save_path, ref_choice=None):
     url = load_key("fish_speech.url") or "http://localhost:7860/"
-    ref_path, ref_type = get_ref_audio("fish_speech", save_path)
+    ref_path, ref_type = get_ref_audio("fish_speech", save_path, ref_choice=ref_choice)
     ref_text = load_key("fish_speech.ref_text") or ""
     
     if not ref_path:
@@ -116,6 +136,7 @@ def handle_fish_speech(text, save_path):
         real_path = real_path.get('name') or real_path.get('path') or real_path.get('value')
         
     return finalize_audio(real_path, save_path)
+
 
 def finalize_audio(temp_path, save_path):
     """验证并移动音频文件"""
