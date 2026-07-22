@@ -1,0 +1,466 @@
+"""
+逐行配音页面 - VideoLingo Streamlit 多页应用
+
+功能：
+1. 从 tts_tasks.xlsx 加载所有配音片段
+2. 每个片段可单独配音（逐行 TTS 生成）
+3. 保留一次性全部配音功能
+4. 支持已生成音频的播放预览
+"""
+import os
+import sys
+import base64
+from io import BytesIO
+from typing import Optional
+
+import streamlit as st
+import pandas as pd
+from pydub import AudioSegment
+
+# 确保项目根目录在 sys.path 中
+current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
+from core.utils import *
+from core.utils.models import *
+from core.tts_backend.tts_main import tts_main
+from core.asr_backend.audio_preprocess import get_audio_duration
+
+# ── 页面配置 ─────────────────────────────────────────────────
+st.set_page_config(
+    page_title="逐行配音 - VideoLingo",
+    page_icon="🎤",
+    layout="wide",
+)
+
+# ── 常量 ─────────────────────────────────────────────────────
+TASKS_FILE = _8_1_AUDIO_TASK  # "output/audio/tts_tasks.xlsx"
+TEMP_DIR = _AUDIO_TMP_DIR      # "output/audio/tmp"
+SEGS_DIR = _AUDIO_SEGS_DIR     # "output/audio/segs"
+
+
+# ── 辅助函数 ─────────────────────────────────────────────────
+
+@st.cache_data(ttl=60)
+def _cached_load_tasks() -> pd.DataFrame:
+    """缓存读取 Excel（仅在文件存在时调用）"""
+    df = pd.read_excel(TASKS_FILE)
+    if 'lines' not in df.columns:
+        df['lines'] = None
+    if 'src_lines' not in df.columns:
+        df['src_lines'] = None
+    return df
+
+
+def load_tasks() -> Optional[pd.DataFrame]:
+    """加载配音任务 DataFrame（带文件存在性检查，不受缓存干扰）"""
+    if not os.path.exists(TASKS_FILE):
+        return None
+    return _cached_load_tasks()
+
+
+def parse_lines(raw):
+    """安全地将 Excel 中存储的 lines 解析为列表"""
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return []
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str):
+        try:
+            return eval(raw)
+        except Exception:
+            return [raw]
+    return []
+
+
+def get_segment_status(number: int, lines_list: list) -> tuple:
+    """
+    检查某个片段的音频生成状态。
+    返回 (all_generated: bool, audio_paths: list, combined_audio: Optional[BytesIO])
+    """
+    os.makedirs(TEMP_DIR, exist_ok=True)
+    audio_paths = []
+    all_generated = True
+
+    for line_idx in range(len(lines_list)):
+        # 先检查 segs 目录（最终文件），再检查 tmp 目录（临时文件）
+        seg_path = os.path.join(SEGS_DIR, f"{number}_{line_idx}.wav")
+        tmp_path = os.path.join(TEMP_DIR, f"{number}_{line_idx}_temp.wav")
+
+        if os.path.exists(seg_path):
+            audio_paths.append(seg_path)
+        elif os.path.exists(tmp_path):
+            audio_paths.append(tmp_path)
+        else:
+            all_generated = False
+            # 仍然加入占位，后续生成
+            audio_paths.append(None)
+
+    # 如果所有音频都已生成，尝试合并为一个 AudioSegment 用于播放
+    combined = None
+    if all_generated and audio_paths:
+        try:
+            combined_audio = AudioSegment.empty()
+            for ap in audio_paths:
+                if ap and os.path.exists(ap):
+                    combined_audio += AudioSegment.from_wav(ap)
+            buf = BytesIO()
+            combined_audio.export(buf, format="wav")
+            buf.seek(0)
+            combined = buf
+        except Exception:
+            combined = None
+
+    return all_generated, audio_paths, combined
+
+
+def dub_single_segment(number: int, lines_list: list, tasks_df: pd.DataFrame) -> bool:
+    """为单个配音片段生成 TTS 音频"""
+    os.makedirs(TEMP_DIR, exist_ok=True)
+    success = True
+    progress_bar = st.progress(0, text=f"正在生成片段 {number} 的音频...")
+
+    for line_idx, line in enumerate(lines_list):
+        temp_file = os.path.join(TEMP_DIR, f"{number}_{line_idx}_temp.wav")
+        try:
+            tts_main(line, temp_file, number, tasks_df)
+            progress_bar.progress(
+                (line_idx + 1) / len(lines_list),
+                text=f"片段 {number}: 第 {line_idx + 1}/{len(lines_list)} 行完成",
+            )
+        except Exception as e:
+            st.error(f"片段 {number} 第 {line_idx + 1} 行配音失败: {e}")
+            success = False
+            break
+
+    progress_bar.empty()
+    return success
+
+
+def get_audio_player(audio_buf: BytesIO) -> str:
+    """生成 HTML audio 播放器标签"""
+    audio_buf.seek(0)
+    audio_bytes = audio_buf.read()
+    b64 = base64.b64encode(audio_bytes).decode()
+    return f'<audio controls style="width: 100%; height: 40px;"><source src="data:audio/wav;base64,{b64}" type="audio/wav"></audio>'
+
+
+def format_time_display(seconds: float) -> str:
+    """将秒数格式化为 mm:ss.xx"""
+    m = int(seconds // 60)
+    s = seconds % 60
+    return f"{m:02d}:{s:05.2f}"
+
+
+# ── 主页面 ───────────────────────────────────────────────────
+
+def main():
+    st.title("🎤 逐行配音")
+    st.markdown("---")
+
+    # 步骤1: 检查任务文件是否存在
+    df = load_tasks()
+    if df is None or df.empty:
+        st.warning("⚠️ 未找到配音任务文件。请先「生成音频任务」。")
+        st.info(f"期待的文件位置: `{TASKS_FILE}`")
+
+        # 提供快捷跳转
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("📋 生成音频任务", type="primary", use_container_width=True):
+                with st.spinner("正在生成音频任务..."):
+                    try:
+                        from core._8_1_audio_task import gen_audio_task_main
+                        from core._8_2_dub_chunks import gen_dub_chunks
+                        gen_audio_task_main()
+                        gen_dub_chunks()
+                        st.success("✅ 音频任务生成完成！")
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ 生成音频任务失败: {e}")
+        with col_b:
+            if st.button("🏠 返回主页面", use_container_width=True):
+                st.switch_page("st.py")
+        return
+
+    # ── 页面顶部：统计信息 & 批量操作 ──
+    total_segments = len(df)
+    # 统计总行数
+    all_lines = [parse_lines(row['lines']) for _, row in df.iterrows()]
+    total_lines = sum(len(ls) for ls in all_lines)
+
+    # 统计已配音的片段数
+    dubbed_count = 0
+    for _, row in df.iterrows():
+        number = row['number']
+        lines_list = parse_lines(row['lines'])
+        generated, _, _ = get_segment_status(number, lines_list)
+        if generated:
+            dubbed_count += 1
+
+    # 统计信息行
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("📋 总片段数", total_segments)
+    with col2:
+        st.metric("📝 总字幕行数", total_lines)
+    with col3:
+        st.metric("✅ 已配音", f"{dubbed_count}/{total_segments}")
+    with col4:
+        pct = (dubbed_count / total_segments * 100) if total_segments > 0 else 0
+        st.metric("📊 完成度", f"{pct:.1f}%")
+
+    st.markdown("---")
+
+    # 批量操作按钮行
+    action_col1, action_col2, action_col3, action_col4, _ = st.columns([1, 1, 1, 1, 2])
+
+    with action_col1:
+        # 一次性全部配音（调用完整管线）
+        if st.button("🎤 配音全部", type="primary", use_container_width=True):
+            with st.spinner("正在为所有片段生成音频（完整管线）..."):
+                try:
+                    from core._10_gen_audio import gen_audio
+                    gen_audio()
+                    st.success("✅ 全部音频生成完成！")
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ 全部配音失败: {e}")
+
+    with action_col2:
+        # 仅生成未配音的片段（增量式）
+        if st.button("➕ 补齐未配音", use_container_width=True):
+            with st.spinner("正在为未配音的片段生成音频..."):
+                success_count = 0
+                fail_count = 0
+                progress = st.progress(0, text="补齐中...")
+                total_undubbed = total_segments - dubbed_count
+
+                if total_undubbed == 0:
+                    st.info("所有片段已配音完成！")
+                else:
+                    processed = 0
+                    for idx, row in df.iterrows():
+                        number = row['number']
+                        lines_list = parse_lines(row['lines'])
+                        generated, _, _ = get_segment_status(number, lines_list)
+                        if not generated and lines_list:
+                            ok = dub_single_segment(number, lines_list, df)
+                            if ok:
+                                success_count += 1
+                            else:
+                                fail_count += 1
+                        processed += 1
+                        progress.progress(
+                            processed / total_segments,
+                            text=f"处理中: {processed}/{total_segments}"
+                        )
+                    progress.empty()
+                    if fail_count == 0:
+                        st.success(f"✅ 补齐完成！成功生成 {success_count} 个片段。")
+                    else:
+                        st.warning(f"⚠️ 补齐完成。成功: {success_count}, 失败: {fail_count}")
+                    st.cache_data.clear()
+                    st.rerun()
+
+    with action_col3:
+        # 重新生成配音任务（重新运行 _8_2_dub_chunks）
+        if st.button("🔄 重新生成配音任务", use_container_width=True):
+            with st.spinner("正在重新生成配音任务..."):
+                try:
+                    from core._8_2_dub_chunks import gen_dub_chunks
+                    gen_dub_chunks()
+                    st.success("✅ 配音任务重新生成完成！")
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ 重新生成失败: {e}")
+
+    with action_col4:
+        # 生成音频任务（运行 _8_1_audio_task + _8_2_dub_chunks）
+        if st.button("📋 生成音频任务", use_container_width=True):
+            with st.spinner("正在生成音频任务..."):
+                try:
+                    from core._8_1_audio_task import gen_audio_task_main
+                    from core._8_2_dub_chunks import gen_dub_chunks
+                    gen_audio_task_main()
+                    gen_dub_chunks()
+                    st.success("✅ 音频任务生成完成！")
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ 生成音频任务失败: {e}")
+
+    st.markdown("---")
+
+    # ── 逐片段列表 ──
+    st.subheader("📜 配音片段列表")
+
+    # 筛选选项
+    filter_col1, filter_col2 = st.columns([1, 3])
+    with filter_col1:
+        status_filter = st.selectbox(
+            "筛选状态",
+            options=["全部", "已配音", "未配音"],
+            index=0,
+        )
+    with filter_col2:
+        # 搜索框
+        search_text = st.text_input("🔍 搜索片段内容", placeholder="输入原文或译文关键词...")
+
+    st.markdown("---")
+
+    # 遍历每个片段
+    found_any = False
+    for idx, row in df.iterrows():
+        number = row['number']
+        lines_list = parse_lines(row['lines'])
+        src_lines_list = parse_lines(row['src_lines'])
+        cut_off = row.get('cut_off', 0)
+
+        # 检查音频状态
+        all_generated, audio_paths, combined_audio = get_segment_status(number, lines_list)
+
+        # 应用筛选
+        if status_filter == "已配音" and not all_generated:
+            continue
+        if status_filter == "未配音" and all_generated:
+            continue
+
+        # 应用搜索
+        if search_text:
+            src_text = ' '.join(src_lines_list) if src_lines_list else ''
+            trans_text = ' '.join(lines_list) if lines_list else ''
+            if search_text.lower() not in src_text.lower() and search_text.lower() not in trans_text.lower():
+                continue
+
+        found_any = True
+
+        # ── 片段卡片 ──
+        with st.container(border=True):
+            # 标题行
+            header_col1, header_col2, header_col3, header_col4 = st.columns([1, 2, 2, 2])
+
+            with header_col1:
+                chunk_info = ""
+                if cut_off == 1:
+                    chunk_info = " 🔪切分点"
+                st.markdown(f"**片段 #{number}**{chunk_info}")
+
+            with header_col2:
+                dur = row.get('duration', 0)
+                st.caption(f"⏱ 时长: {format_time_display(dur)}")
+
+            with header_col3:
+                if all_generated:
+                    st.markdown("✅ **已配音**")
+                else:
+                    st.markdown("⏳ **未配音**")
+
+            with header_col4:
+                if cut_off == 1:
+                    st.markdown("🏁 **块结束**")
+                else:
+                    st.markdown("")
+
+            # 原文 & 译文 预览（可展开）
+            with st.expander("📄 查看原文 & 译文", expanded=not all_generated):
+                col_src, col_trans = st.columns(2)
+
+                with col_src:
+                    st.markdown("**🔤 原文 (src_lines):**")
+                    if src_lines_list:
+                        for i, sl in enumerate(src_lines_list):
+                            st.markdown(f">  [{i + 1}] {sl}")
+                    else:
+                        st.caption("(空)")
+
+                with col_trans:
+                    st.markdown("**🌐 译文 (lines):**")
+                    if lines_list:
+                        for i, ll in enumerate(lines_list):
+                            st.markdown(f">  [{i + 1}] {ll}")
+                    else:
+                        st.caption("(空)")
+
+            # 操作区
+            op_col1, op_col2, op_col3 = st.columns([1, 2, 4])
+
+            with op_col1:
+                # 单独配音按钮（关键功能）
+                dub_key = f"dub_{number}"
+                if st.button(f"🎤 单独配音", key=dub_key, use_container_width=True):
+                    if not lines_list:
+                        st.warning(f"片段 #{number} 没有需要配音的文本。")
+                    else:
+                        with st.spinner(f"正在为片段 #{number} 生成音频 ({len(lines_list)} 行)..."):
+                            ok = dub_single_segment(number, lines_list, df)
+                            if ok:
+                                st.success(f"✅ 片段 #{number} 配音完成！")
+                                st.rerun()
+                            else:
+                                st.error(f"❌ 片段 #{number} 配音失败。")
+
+            with op_col2:
+                # 播放音频
+                if all_generated and combined_audio:
+                    audio_html = get_audio_player(combined_audio)
+                    st.markdown(audio_html, unsafe_allow_html=True)
+                elif audio_paths and any(p is not None for p in audio_paths):
+                    # 部分生成时，尝试播放已存在的部分
+                    try:
+                        partial_audio = AudioSegment.empty()
+                        for ap in audio_paths:
+                            if ap and os.path.exists(ap):
+                                partial_audio += AudioSegment.from_wav(ap)
+                        if len(partial_audio) > 0:
+                            buf = BytesIO()
+                            partial_audio.export(buf, format="wav")
+                            buf.seek(0)
+                            audio_html = get_audio_player(buf)
+                            st.markdown(audio_html, unsafe_allow_html=True)
+                        else:
+                            st.caption("无音频可播放")
+                    except Exception:
+                        st.caption("无音频可播放")
+                else:
+                    st.caption("暂无音频")
+
+            with op_col3:
+                # 显示每行音频时长信息
+                if all_generated and audio_paths:
+                    durations = []
+                    for ap in audio_paths:
+                        if ap and os.path.exists(ap):
+                            d = get_audio_duration(ap)
+                            durations.append(d)
+                    total_dur = sum(durations)
+                    dur_str = " + ".join(f"{d:.2f}s" for d in durations)
+                    st.caption(f"📊 各句时长: {dur_str} = **{total_dur:.2f}s**")
+                elif lines_list:
+                    st.caption(f"📝 待配音: {len(lines_list)} 行")
+                else:
+                    st.caption("")
+
+        # 片段间间隔
+        st.markdown("<br>", unsafe_allow_html=True)
+
+    if not found_any:
+        st.info("没有匹配当前筛选条件的片段。")
+        if status_filter != "全部":
+            st.markdown(f"当前筛选: **{status_filter}**。尝试切换到「全部」查看所有片段。")
+
+    # ── 底部提示 ──
+    st.markdown("---")
+    st.caption(
+        "💡 **提示**: 点击「单独配音」可为单个片段生成 TTS 音频（仅生成临时文件），"
+        "点击「配音全部」会执行完整管线（含变速合并）。"
+        "如果片段已配音，可直接在页面中播放预览。"
+    )
+
+
+if __name__ == "__main__":
+    main()
