@@ -11,6 +11,7 @@ import os
 import sys
 import base64
 import shutil
+import concurrent.futures
 from io import BytesIO
 from typing import Optional
 
@@ -210,6 +211,21 @@ def delete_segment_audio(number: int, lines_list: list) -> int:
     return deleted
 
 
+def _dub_segment_worker(number: int, lines_list: list, tasks_df: pd.DataFrame, ref_lines: list) -> tuple:
+    """线程安全的配音 worker——不调用任何 Streamlit UI 函数，只返回结果"""
+    os.makedirs(TEMP_DIR, exist_ok=True)
+    for line_idx, line in enumerate(lines_list):
+        line_ref = ref_lines[line_idx] if line_idx < len(ref_lines) else '1'
+        if line_ref not in ('1', '2'):
+            line_ref = '1'
+        temp_file = os.path.join(TEMP_DIR, f"{number}_{line_idx}_temp.wav")
+        try:
+            tts_main(line, temp_file, number, tasks_df, ref_choice=line_ref)
+        except Exception as e:
+            return (number, False, str(e))
+    return (number, True, None)
+
+
 def get_audio_player(audio_buf: BytesIO) -> str:
     """生成 HTML audio 播放器标签"""
     audio_buf.seek(0)
@@ -394,7 +410,7 @@ def main():
     st.markdown("---")
 
     # 批量操作按钮行
-    action_col1, action_col2, action_col3, action_col4, _ = st.columns([1, 1, 1, 1, 2])
+    action_col1, action_col2, action_col3, action_col4, action_col5, action_col6 = st.columns([1, 1, 1, 1, 1, 1])
 
     with action_col1:
         # 一次性全部配音（调用完整管线）
@@ -421,7 +437,8 @@ def main():
                 if total_undubbed == 0:
                     st.info("所有片段已配音完成！")
                 else:
-                    processed = 0
+                    # 收集所有未配音片段
+                    undubbed_tasks = []
                     for idx, row in df.iterrows():
                         number = row['number']
                         lines_list = parse_lines(row['lines'])
@@ -430,21 +447,40 @@ def main():
                             seg_ref_lines = ['1'] * len(lines_list) if lines_list else []
                         generated, _, _ = get_segment_status(number, lines_list)
                         if not generated and lines_list:
-                            ok = dub_single_segment(number, lines_list, df, ref_lines=seg_ref_lines)
-                            if ok:
-                                success_count += 1
-                            else:
-                                fail_count += 1
-                        processed += 1
-                        progress.progress(
-                            processed / total_segments,
-                            text=f"处理中: {processed}/{total_segments}"
-                        )
-                    progress.empty()
-                    if fail_count == 0:
-                        st.success(f"✅ 补齐完成！成功生成 {success_count} 个片段。")
+                            undubbed_tasks.append((number, lines_list, seg_ref_lines))
+
+                    total = len(undubbed_tasks)
+                    if total == 0:
+                        st.info("所有片段已配音完成！")
                     else:
-                        st.warning(f"⚠️ 补齐完成。成功: {success_count}, 失败: {fail_count}")
+                        # 使用线程池并发配音（默认 3 个 worker）
+                        max_workers = 3
+                        progress_bar = st.progress(0, text=f"并行配音中 (最大 {max_workers} 并发)...")
+                        completed = 0
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                            future_map = {}
+                            for number, lines_list, seg_ref_lines in undubbed_tasks:
+                                fut = executor.submit(_dub_segment_worker, number, lines_list, df, seg_ref_lines)
+                                future_map[fut] = number
+
+                            for future in concurrent.futures.as_completed(future_map):
+                                number, ok, err_msg = future.result()
+                                completed += 1
+                                progress_bar.progress(
+                                    completed / total,
+                                    text=f"并行配音中: {completed}/{total} 片段完成"
+                                )
+                                if ok:
+                                    success_count += 1
+                                else:
+                                    fail_count += 1
+                                    st.error(f"❌ 片段 #{number} 失败: {err_msg}")
+
+                        progress_bar.empty()
+                        if fail_count == 0:
+                            st.success(f"✅ 补齐完成！成功生成 {success_count} 个片段。")
+                        else:
+                            st.warning(f"⚠️ 补齐完成。成功: {success_count}, 失败: {fail_count}")
                     st.cache_data.clear()
                     st.rerun()
 
@@ -475,6 +511,79 @@ def main():
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ 生成音频任务失败: {e}")
+
+    with action_col5:
+        # 批量配音（所有片段，并发覆盖）
+        if st.button("🔊 批量配音", type="secondary", use_container_width=True):
+            with st.spinner("正在批量配音..."):
+                # 先删除所有已有音频
+                total_del = 0
+                for _, row in df.iterrows():
+                    number = row['number']
+                    lines_list = parse_lines(row['lines'])
+                    total_del += delete_segment_audio(number, lines_list)
+
+                # 收集所有片段
+                all_tasks = []
+                for _, row in df.iterrows():
+                    number = row['number']
+                    lines_list = parse_lines(row['lines'])
+                    seg_ref_lines = parse_lines(row.get('ref_lines', ''))
+                    if not seg_ref_lines or len(seg_ref_lines) != len(lines_list):
+                        seg_ref_lines = ['1'] * len(lines_list) if lines_list else []
+                    if lines_list:
+                        all_tasks.append((number, lines_list, seg_ref_lines))
+
+                total = len(all_tasks)
+                if total == 0:
+                    st.info("没有需要配音的片段。")
+                else:
+                    success_count = 0
+                    fail_count = 0
+                    max_workers = 3
+                    progress_bar = st.progress(0, text=f"批量并行配音中 (最大 {max_workers} 并发)...")
+                    completed = 0
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        future_map = {}
+                        for number, lines_list, seg_ref_lines in all_tasks:
+                            fut = executor.submit(_dub_segment_worker, number, lines_list, df, seg_ref_lines)
+                            future_map[fut] = number
+
+                        for future in concurrent.futures.as_completed(future_map):
+                            number, ok, err_msg = future.result()
+                            completed += 1
+                            progress_bar.progress(
+                                completed / total,
+                                text=f"批量配音中: {completed}/{total} 片段完成"
+                            )
+                            if ok:
+                                success_count += 1
+                            else:
+                                fail_count += 1
+                                st.error(f"❌ 片段 #{number} 失败: {err_msg}")
+
+                    progress_bar.empty()
+                    if fail_count == 0:
+                        st.success(f"✅ 批量配音完成！成功生成 {success_count} 个片段（已删除 {total_del} 个旧文件）。")
+                    else:
+                        st.warning(f"⚠️ 批量配音完成。成功: {success_count}, 失败: {fail_count}（已删除 {total_del} 个旧文件）。")
+                st.cache_data.clear()
+                st.rerun()
+
+    with action_col6:
+        # 删除全部配音（所有片段的音频文件）
+        if st.button("🗑️ 删除全部配音", type="secondary", use_container_width=True):
+            deleted = 0
+            for _, row in df.iterrows():
+                number = row['number']
+                lines_list = parse_lines(row['lines'])
+                deleted += delete_segment_audio(number, lines_list)
+            if deleted > 0:
+                st.success(f"✅ 已删除全部配音文件，共 {deleted} 个文件。")
+            else:
+                st.info("没有找到可删除的配音文件。")
+            st.cache_data.clear()
+            st.rerun()
 
     # ── 合并到视频 ──
     DUB_VIDEO = "output/output_dub.mp4"
