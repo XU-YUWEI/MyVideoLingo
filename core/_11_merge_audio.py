@@ -52,6 +52,7 @@ def process_audio_segment(audio_file):
     return audio_segment
 
 def merge_audio_segments(audios, new_sub_times, sample_rate):
+    CROSSFADE_MS = 15  # 交叉淡化时长（毫秒），使相邻段落平滑过渡
     merged_audio = AudioSegment.silent(duration=0, frame_rate=sample_rate)
     
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), TaskProgressColumn()) as progress:
@@ -64,20 +65,27 @@ def merge_audio_segments(audios, new_sub_times, sample_rate):
                 continue
                 
             audio_segment = process_audio_segment(audio_file)
+            # 对每段音频应用淡入/淡出（10ms），消除边界杂音（click/pop）
+            audio_segment = audio_segment.fade_in(10).fade_out(10)
             start_time, end_time = time_range
             
-            # Add silence segment
             if i > 0:
                 prev_end = new_sub_times[i-1][1]
                 silence_duration = start_time - prev_end
-                if silence_duration > 0:
-                    silence = AudioSegment.silent(duration=int(silence_duration * 1000), frame_rate=sample_rate)
-                    merged_audio += silence
-            elif start_time > 0:
-                silence = AudioSegment.silent(duration=int(start_time * 1000), frame_rate=sample_rate)
-                merged_audio += silence
                 
-            merged_audio += audio_segment
+                if silence_duration > 0.03:  # 间隔 > 30ms：先插入静音，再以交叉淡化衔接
+                    silence_ms = int(silence_duration * 1000) - CROSSFADE_MS
+                    if silence_ms > 0:
+                        silence = AudioSegment.silent(duration=silence_ms, frame_rate=sample_rate)
+                        merged_audio += silence
+                # 间隔 <= 30ms 或无间隔：直接交叉淡化（重叠过渡）
+                merged_audio = merged_audio.append(audio_segment, crossfade=CROSSFADE_MS)
+            else:
+                if start_time > 0:
+                    silence = AudioSegment.silent(duration=int(start_time * 1000), frame_rate=sample_rate)
+                    merged_audio += silence
+                merged_audio += audio_segment
+                    
             progress.advance(merge_task)
     
     return merged_audio

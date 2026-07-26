@@ -78,13 +78,22 @@ def merge_video_audio():
         f"BackColour={TRANS_BACK_COLOR},Alignment=2,MarginV=27,BorderStyle={trans_border_style}'"
     )
     
+    # 读取配音音量配置（0.0 ~ 1.0，默认 0.5），降低配音音量使背景音不被盖住
+    try:
+        dub_volume = float(load_key("dub_volume"))
+    except (KeyError, TypeError):
+        dub_volume = 0.5
+    bg_volume = 1.0  # 背景音保持原始音量
+    
     cmd = [
         'ffmpeg', '-y', '-i', VIDEO_FILE, '-i', background_file, '-i', normalized_dub_audio,
         '-filter_complex',
         f'[0:v]scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=decrease,'
         f'pad={TARGET_WIDTH}:{TARGET_HEIGHT}:(ow-iw)/2:(oh-ih)/2,'
         f'{subtitle_filter}[v];'
-        f'[1:a][2:a]amix=inputs=2:duration=first:dropout_transition=3[a]'
+        f'[1:a]volume={bg_volume}[bg];'
+        f'[2:a]volume={dub_volume}[dub];'
+        f'[bg][dub]amix=inputs=2:duration=first:dropout_transition=3[a]'
     ]
 
     if load_key("ffmpeg_gpu"):

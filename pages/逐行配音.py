@@ -374,8 +374,11 @@ def main():
         if generated:
             dubbed_count += 1
 
+    # 统计总时长（excel 中的 duration 字段，单位秒）
+    total_duration = df['duration'].sum() if 'duration' in df.columns else 0
+
     # 统计信息行
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("📋 总片段数", total_segments)
     with col2:
@@ -385,6 +388,8 @@ def main():
     with col4:
         pct = (dubbed_count / total_segments * 100) if total_segments > 0 else 0
         st.metric("📊 完成度", f"{pct:.1f}%")
+    with col5:
+        st.metric("⏱ 总时长", format_time_display(total_duration))
 
     st.markdown("---")
 
@@ -472,15 +477,91 @@ def main():
                     st.error(f"❌ 生成音频任务失败: {e}")
 
     # ── 合并到视频 ──
+    DUB_VIDEO = "output/output_dub.mp4"
+    dub_video_exists = os.path.exists(DUB_VIDEO)
+
     with st.container(border=True):
         merge_col1, merge_col2 = st.columns([1, 4])
         with merge_col1:
             st.markdown("**🎬 合并到视频**")
         with merge_col2:
+            status = "✅ 已生成" if dub_video_exists else "❌ 未生成"
             st.markdown(
-                "将已生成的配音音频合并到原始视频中，生成最终配音视频。"
-                "流程：① 合并音频片段 → ② 合成到视频（含字幕烧录）。"
+                f"将已生成的配音音频合并到原始视频中，生成最终配音视频。"
+                f"状态: **{status}**"
+                " 流程：① 合并音频片段 → ② 合成到视频（含字幕烧录）。"
             )
+
+        # ── 字幕设置（可折叠） ──
+        with st.expander("📝 字幕设置", expanded=False):
+            from core.utils.config_utils import load_key, update_key
+            from core.st_utils.sidebar_setting import get_windows_fonts
+
+            # 烧录字幕开关
+            current_burn = load_key("burn_subtitles")
+            burn_on = st.toggle("烧录字幕", value=current_burn if current_burn is not None else True)
+            if burn_on != current_burn:
+                update_key("burn_subtitles", burn_on)
+                st.rerun()
+
+            if burn_on:
+                sub_font_col1, sub_font_col2 = st.columns(2)
+                with sub_font_col1:
+                    # 字体选择
+                    all_fonts = get_windows_fonts()
+                    current_font = load_key("subtitle.font") or "Arial"
+                    if current_font not in all_fonts:
+                        font_idx = all_fonts.index("Arial") if "Arial" in all_fonts else 0
+                    else:
+                        font_idx = all_fonts.index(current_font)
+                    selected_font = st.selectbox("字幕字体", options=all_fonts, index=font_idx)
+                    if selected_font != current_font:
+                        update_key("subtitle.font", selected_font)
+                        st.rerun()
+
+                    # 字号
+                    current_size = load_key("subtitle.font_size") or 17
+                    selected_size = st.number_input("字体大小", min_value=10, max_value=100, value=int(current_size), step=1)
+                    if selected_size != current_size:
+                        update_key("subtitle.font_size", selected_size)
+                        st.rerun()
+
+                with sub_font_col2:
+                    # 字体颜色
+                    current_hex = load_key("subtitle.trans_color_hex") or "#00FFFF"
+                    selected_color = st.color_picker("字体颜色", value=current_hex)
+                    if selected_color != current_hex:
+                        update_key("subtitle.trans_color_hex", selected_color)
+                        ass_color = f"&H{selected_color[5:7]}{selected_color[3:5]}{selected_color[1:3]}"
+                        update_key("subtitle.trans_color", ass_color)
+                        st.rerun()
+
+                    # 字幕背景开关
+                    current_bg = load_key("subtitle.use_bg") if load_key("subtitle.use_bg") is not None else True
+                    use_bg = st.toggle("字幕背景", value=current_bg)
+                    if use_bg != current_bg:
+                        update_key("subtitle.use_bg", use_bg)
+                        st.rerun()
+
+            # ── 配音音量调节 ──
+            with st.container():
+                st.markdown("**🔊 音频混合设置**")
+                try:
+                    current_dub_vol = load_key("dub_volume")
+                except KeyError:
+                    current_dub_vol = 0.5
+                dub_vol = st.slider(
+                    "配音音量（相对背景音）",
+                    min_value=0.0, max_value=1.0,
+                    value=float(current_dub_vol), step=0.05,
+                    help="降低配音音量可让视频背景音更清晰。默认 0.5（50%）"
+                )
+                if dub_vol != float(current_dub_vol):
+                    try:
+                        update_key("dub_volume", dub_vol)
+                    except KeyError:
+                        pass
+
         if st.button("🎬 将最终音频合并到视频中", type="secondary", use_container_width=True, key="merge_to_video"):
             try:
                 # Step 1: 合并音频片段
@@ -496,8 +577,6 @@ def main():
                     st.success("✅ 视频合成完成！")
 
                 st.success("🎉 最终配音视频已生成！")
-                # 显示输出文件路径
-                DUB_VIDEO = "output/output_dub.mp4"
                 if os.path.exists(DUB_VIDEO):
                     size_mb = os.path.getsize(DUB_VIDEO) / (1024 * 1024)
                     st.info(f"📁 输出文件: `{DUB_VIDEO}` ({size_mb:.1f} MB)")
@@ -506,6 +585,19 @@ def main():
                 st.rerun()
             except Exception as e:
                 st.error(f"❌ 合并/合成失败: {e}")
+
+        # ── 显示已生成的视频（手机屏幕大小） ──
+        if dub_video_exists:
+            size_mb = os.path.getsize(DUB_VIDEO) / (1024 * 1024)
+            st.markdown(f"**📺 预览输出视频** (`{DUB_VIDEO}`, {size_mb:.1f} MB)")
+            try:
+                with open(DUB_VIDEO, "rb") as vf:
+                    video_bytes = vf.read()
+                phone_col1, phone_col2, phone_col3 = st.columns([1, 1, 1])
+                with phone_col2:
+                    st.video(video_bytes)
+            except Exception as e:
+                st.error(f"无法加载视频预览: {e}")
 
     st.markdown("---")
 
@@ -524,6 +616,37 @@ def main():
         # 搜索框
         search_text = st.text_input("🔍 搜索片段内容", placeholder="输入原文或译文关键词...")
 
+    # ── 保存全部按钮 ──
+    save_all_col1, save_all_col2 = st.columns([3, 1])
+    with save_all_col1:
+        st.caption("💡 修改译文或参考选择后，点击右侧按钮一次性保存所有更改。")
+    with save_all_col2:
+        if st.button("💾 保存全部译文 & 参考选择", type="primary", use_container_width=True, key="save_all_btn"):
+            try:
+                saved_count = 0
+                for idx, row in df.iterrows():
+                    number = row['number']
+                    lines_list = parse_lines(row['lines'])
+                    ref_lines_old = parse_lines(row.get('ref_lines', ''))
+
+                    edited_lines = []
+                    new_ref_lines = []
+                    for i in range(len(lines_list)):
+                        trans_val = st.session_state.get(f"trans_{number}_{i}", lines_list[i])
+                        ref_val = st.session_state.get(f"ref_line_{number}_{i}", ref_lines_old[i] if i < len(ref_lines_old) else '1')
+                        edited_lines.append(trans_val)
+                        new_ref_lines.append(ref_val)
+
+                    df.at[idx, 'lines'] = str(edited_lines)
+                    df.at[idx, 'ref_lines'] = str(new_ref_lines)
+                    saved_count += 1
+
+                df.to_excel(TASKS_FILE, index=False)
+                st.cache_data.clear()
+                st.success(f"✅ 已保存全部 {saved_count} 个片段的译文和参考选择！")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ 保存失败: {e}")
     st.markdown("---")
 
     # 遍历每个片段
@@ -568,7 +691,7 @@ def main():
 
             with header_col2:
                 dur = row.get('duration', 0)
-                st.caption(f"⏱ 时长: {format_time_display(dur)}")
+                st.markdown(f"⏱ **最长音频**: {format_time_display(dur)}")
 
             with header_col3:
                 if all_generated:
@@ -601,54 +724,38 @@ def main():
                         ref1_ok = ref_status['1']['exists']
                         ref2_ok = ref_status['2']['exists']
 
-                        with st.form(key=f"trans_form_{number}"):
-                            edited_lines = []
-                            new_ref_lines = []
-                            for i, ll in enumerate(lines_list):
-                                line_cols = st.columns([3, 1])
-                                with line_cols[0]:
-                                    new_val = st.text_input(
-                                        f"第 {i + 1} 行",
-                                        value=ll,
-                                        key=f"trans_{number}_{i}",
-                                        label_visibility="collapsed",
-                                        placeholder="输入译文...",
-                                    )
-                                    edited_lines.append(new_val)
-                                with line_cols[1]:
-                                    line_ref = ref_lines[i] if i < len(ref_lines) else '1'
-                                    if line_ref not in ('1', '2'):
-                                        line_ref = '1'
-                                    ref_opts = {}
-                                    if ref1_ok:
-                                        ref_opts['1'] = "参考1"
-                                    if ref2_ok:
-                                        ref_opts['2'] = "参考2"
-                                    if not ref_opts:
-                                        ref_opts['1'] = "参考1"
-                                        ref_opts['2'] = "参考2"
-                                    keys = list(ref_opts.keys())
-                                    default_idx = keys.index(line_ref) if line_ref in keys else 0
-                                    sel = st.selectbox(
-                                        f"参考{i+1}",
-                                        options=keys,
-                                        format_func=lambda x: ref_opts.get(x, f"参考{x}"),
-                                        index=default_idx,
-                                        key=f"ref_line_{number}_{i}",
-                                        label_visibility="collapsed",
-                                    )
-                                    new_ref_lines.append(sel)
-
-                            if st.form_submit_button("💾 保存译文 & 参考选择", use_container_width=True):
-                                try:
-                                    df.at[idx, 'lines'] = str(edited_lines)
-                                    df.at[idx, 'ref_lines'] = str(new_ref_lines)
-                                    df.to_excel(TASKS_FILE, index=False)
-                                    st.cache_data.clear()
-                                    st.success(f"✅ 片段 #{number} 译文和参考选择已保存！")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"❌ 保存失败: {e}")
+                        for i, ll in enumerate(lines_list):
+                            line_cols = st.columns([3, 1])
+                            with line_cols[0]:
+                                st.text_input(
+                                    f"第 {i + 1} 行",
+                                    value=ll,
+                                    key=f"trans_{number}_{i}",
+                                    label_visibility="collapsed",
+                                    placeholder="输入译文...",
+                                )
+                            with line_cols[1]:
+                                line_ref = ref_lines[i] if i < len(ref_lines) else '1'
+                                if line_ref not in ('1', '2'):
+                                    line_ref = '1'
+                                ref_opts = {}
+                                if ref1_ok:
+                                    ref_opts['1'] = "参考1"
+                                if ref2_ok:
+                                    ref_opts['2'] = "参考2"
+                                if not ref_opts:
+                                    ref_opts['1'] = "参考1"
+                                    ref_opts['2'] = "参考2"
+                                keys = list(ref_opts.keys())
+                                default_idx = keys.index(line_ref) if line_ref in keys else 0
+                                st.selectbox(
+                                    f"参考{i+1}",
+                                    options=keys,
+                                    format_func=lambda x: ref_opts.get(x, f"参考{x}"),
+                                    index=default_idx,
+                                    key=f"ref_line_{number}_{i}",
+                                    label_visibility="collapsed",
+                                )
                     else:
                         st.caption("(空)")
 
