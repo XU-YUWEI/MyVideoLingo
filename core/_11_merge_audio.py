@@ -69,6 +69,17 @@ def merge_audio_segments(audios, new_sub_times, sample_rate):
             audio_segment = audio_segment.fade_in(10).fade_out(10)
             start_time, end_time = time_range
             
+            # ── 关键修复：按预期时长填充静音，防止音画不同步 ──
+            expected_duration_ms = int((end_time - start_time) * 1000)
+            actual_duration_ms = len(audio_segment)
+            if actual_duration_ms < expected_duration_ms:
+                silence_pad = AudioSegment.silent(
+                    duration=expected_duration_ms - actual_duration_ms,
+                    frame_rate=sample_rate
+                )
+                audio_segment = audio_segment + silence_pad
+                console.print(f"[dim]⏱️  File {os.path.basename(audio_file)}: padded {actual_duration_ms}ms → {expected_duration_ms}ms ({expected_duration_ms - actual_duration_ms}ms silence)[/dim]")
+            
             if i > 0:
                 prev_end = new_sub_times[i-1][1]
                 silence_duration = start_time - prev_end

@@ -11,6 +11,7 @@ import os
 import sys
 import base64
 import shutil
+import subprocess
 import concurrent.futures
 from io import BytesIO
 from typing import Optional
@@ -40,6 +41,7 @@ st.set_page_config(
 TASKS_FILE = _8_1_AUDIO_TASK           # "output/audio/tts_tasks.xlsx"
 TEMP_DIR = _AUDIO_TMP_DIR                # "output/audio/tmp"
 SEGS_DIR = _AUDIO_SEGS_DIR               # "output/audio/segs"
+ORIG_CACHE_DIR = os.path.join("output", "audio", "orig_cache")  # 原音片段缓存目录
 USER_REF_DIR = os.path.join("output", "audio")  # 用户上传参考音频保存目录
 # ── 用户上传参考音频的文件路径 ──
 USER_REF_1_PATH = os.path.join(USER_REF_DIR, "user_ref1.wav")
@@ -232,6 +234,63 @@ def get_audio_player(audio_buf: BytesIO) -> str:
     audio_bytes = audio_buf.read()
     b64 = base64.b64encode(audio_bytes).decode()
     return f'<audio controls style="width: 100%; height: 40px;"><source src="data:audio/wav;base64,{b64}" type="audio/wav"></audio>'
+
+
+def get_original_audio_player(number: int, new_sub_times_raw) -> Optional[str]:
+    """提取原音片段（从 raw.mp3 中截取对应时间段）并返回 HTML 播放器"""
+    if not os.path.exists(_RAW_AUDIO_FILE):
+        return None
+
+    # 解析 new_sub_times
+    if isinstance(new_sub_times_raw, str):
+        try:
+            sub_times = eval(new_sub_times_raw)
+        except Exception:
+            return None
+    else:
+        sub_times = new_sub_times_raw
+
+    if not sub_times or not isinstance(sub_times, (list, tuple)) or len(sub_times) == 0:
+        return None
+
+    # 取第一行 start → 最后一行 end
+    try:
+        start_time = sub_times[0][0]
+        end_time = sub_times[-1][1]
+    except (IndexError, TypeError):
+        return None
+
+    duration = end_time - start_time
+    if duration <= 0:
+        return None
+
+    # 缓存文件（独立的 orig_cache 目录，不与其他临时文件混合）
+    os.makedirs(ORIG_CACHE_DIR, exist_ok=True)
+    orig_cache = os.path.join(ORIG_CACHE_DIR, f"{number}_original.wav")
+
+    if not os.path.exists(orig_cache):
+        cmd = [
+            'ffmpeg', '-y',
+            '-i', _RAW_AUDIO_FILE,
+            '-ss', str(start_time),
+            '-t', str(duration),
+            '-ar', '16000',
+            '-ac', '1',
+            orig_cache
+        ]
+        try:
+            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        except Exception:
+            return None
+
+    # 生成播放器
+    try:
+        with open(orig_cache, 'rb') as f:
+            audio_bytes = f.read()
+        b64 = base64.b64encode(audio_bytes).decode()
+        return f'<audio controls style="width: 100%; height: 40px;"><source src="data:audio/wav;base64,{b64}" type="audio/wav"></audio>'
+    except Exception:
+        return None
 
 
 def format_time_display(seconds: float) -> str:
@@ -869,7 +928,7 @@ def main():
                         st.caption("(空)")
 
             # 操作区
-            op_col1, op_col2, op_col3, op_col4, op_col5 = st.columns([1, 1, 1, 2, 3])
+            op_col1, op_col2, op_col3, op_col4, op_col5, op_col6 = st.columns([1, 1, 1, 2, 2, 2])
 
             with op_col1:
                 # 配音（首次 / 覆盖）
@@ -955,6 +1014,15 @@ def main():
                     st.caption("暂无音频")
 
             with op_col5:
+                # ── 原音片段 ──
+                st.markdown("**🔊 原音**")
+                orig_html = get_original_audio_player(number, row.get('new_sub_times', ''))
+                if orig_html:
+                    st.markdown(orig_html, unsafe_allow_html=True)
+                else:
+                    st.caption("未找到原音文件")
+
+            with op_col6:
                 # 显示每行音频时长信息
                 if all_generated and audio_paths:
                     durations = []
