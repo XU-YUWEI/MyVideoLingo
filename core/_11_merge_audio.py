@@ -69,6 +69,18 @@ def merge_audio_segments(audios, new_sub_times, sample_rate):
             audio_segment = audio_segment.fade_in(10).fade_out(10)
             start_time, end_time = time_range
             
+            # ── 关键修复：确保每段音频时长等于预期时长 (end_time - start_time) ──
+            expected_duration_ms = int((end_time - start_time) * 1000)
+            actual_duration_ms = len(audio_segment)
+            if actual_duration_ms < expected_duration_ms:
+                # 实际音频短于预期，在末尾补充静音以对齐时间轴，防止音画不同步
+                padding_ms = expected_duration_ms - actual_duration_ms
+                silence_pad = AudioSegment.silent(duration=padding_ms, frame_rate=sample_rate)
+                audio_segment = audio_segment + silence_pad
+            elif actual_duration_ms > expected_duration_ms:
+                # 实际音频长于预期，裁剪到预期长度（保留淡出效果）
+                audio_segment = audio_segment[:expected_duration_ms]
+            
             if i > 0:
                 prev_end = new_sub_times[i-1][1]
                 silence_duration = start_time - prev_end

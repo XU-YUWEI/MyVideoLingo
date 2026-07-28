@@ -45,8 +45,87 @@ USER_REF_DIR = os.path.join("output", "audio")  # 用户上传参考音频保存
 USER_REF_1_PATH = os.path.join(USER_REF_DIR, "user_ref1.wav")
 USER_REF_2_PATH = os.path.join(USER_REF_DIR, "user_ref2.wav")
 
+# ── SRT 文件路径 ──
+SRC_SRT = os.path.join("output", "src.srt")
+TRANS_SRT = os.path.join("output", "trans.srt")
+
 
 # ── 辅助函数 ─────────────────────────────────────────────────
+
+def _srt_time_to_seconds(t: str) -> float:
+    """
+    将 SRT 时间格式 (HH:MM:SS,mmm 或 HH:MM:SS.mmm) 转换为秒。
+    SRT 标准格式使用逗号分隔毫秒，但 Excel 中可能用点号。
+    """
+    t = t.strip()
+    # 统一将逗号替换为点号，方便解析
+    t = t.replace(',', '.')
+    parts = t.split(':')
+    h, m = int(parts[0]), int(parts[1])
+    s_parts = parts[2].split('.')
+    s = int(s_parts[0])
+    ms = int(s_parts[1]) if len(s_parts) > 1 else 0
+    return h * 3600 + m * 60 + s + ms / 1000.0
+
+
+def parse_srt_entries(srt_path: str) -> list:
+    """
+    解析 SRT 文件，返回列表，每个元素为 (start_sec, end_sec, text) 的元组。
+    """
+    if not os.path.exists(srt_path):
+        return []
+    entries = []
+    with open(srt_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    for block in content.strip().split('\n\n'):
+        lines = [line.strip() for line in block.split('\n') if line.strip()]
+        if len(lines) < 3:
+            continue
+        try:
+            time_part = lines[1]
+            start_str, end_str = time_part.split(' --> ')
+            start_sec = _srt_time_to_seconds(start_str)
+            end_sec = _srt_time_to_seconds(end_str)
+            text = ' '.join(lines[2:])
+            entries.append((start_sec, end_sec, text))
+        except Exception:
+            continue
+    return entries
+
+
+@st.cache_data(ttl=120)
+def _cached_load_src_srt() -> list:
+    """缓存加载原文 SRT 文件"""
+    return parse_srt_entries(SRC_SRT)
+
+
+@st.cache_data(ttl=120)
+def _cached_load_trans_srt() -> list:
+    """缓存加载译文 SRT 文件"""
+    return parse_srt_entries(TRANS_SRT)
+
+
+def get_srt_texts_by_segment(srt_entries: list, seg_start_str: str, seg_end_str: str) -> list:
+    """
+    从 SRT 条目中筛选出结束时间在 (seg_start, seg_end] 区间内的文本列表（左开右闭）。
+    左开右闭保证相邻片段的边界 SRT 条目不会被重复匹配：
+      片段 A [t0, t1] 匹配 (t0, t1] -> 边界值 t1 属于片段 A
+      片段 B [t1, t2] 匹配 (t1, t2] -> 边界值 t1 不属于片段 B
+    seg_start_str / seg_end_str: 来自 Excel 的 SRT 格式时间字符串 (HH:MM:SS.mmm)
+    """
+    if not srt_entries or not seg_start_str or not seg_end_str:
+        return []
+    try:
+        seg_start = _srt_time_to_seconds(seg_start_str)
+        seg_end = _srt_time_to_seconds(seg_end_str)
+    except Exception:
+        return []
+    matched = []
+    for start_sec, end_sec, text in srt_entries:
+        # 左开右闭：seg_start < end_sec <= seg_end
+        if seg_start < end_sec <= seg_end:
+            matched.append(text)
+    return matched
 
 @st.cache_data(ttl=60)
 def _cached_load_tasks() -> pd.DataFrame:
@@ -239,6 +318,67 @@ def format_time_display(seconds: float) -> str:
     m = int(seconds // 60)
     s = seconds % 60
     return f"{m:02d}:{s:05.2f}"
+
+
+def get_original_audio_segment(number: int, start_time_str: str, end_time_str: str) -> Optional[BytesIO]:
+    """
+    获取指定片段的原音音频，返回 BytesIO 供播放器使用。
+    优先使用已提取的参考音频文件 (output/audio/refers/{number}.wav)，
+    若不存在则从原始音频文件中实时截取。
+    """
+    ref_path = os.path.join(_AUDIO_REFERS_DIR, f"{number}.wav")
+    if os.path.exists(ref_path):
+        try:
+            audio = AudioSegment.from_wav(ref_path)
+            buf = BytesIO()
+            audio.export(buf, format="wav")
+            buf.seek(0)
+            return buf
+        except Exception:
+            pass
+
+    # 实时截取：从 vocal.mp3 或 raw.mp3 中截取对应时间段
+    source_audio = None
+    for src in [_VOCAL_AUDIO_FILE, _RAW_AUDIO_FILE]:
+        if os.path.exists(src):
+            source_audio = src
+            break
+    if source_audio is None:
+        return None
+
+    try:
+        start_sec = _srt_time_to_seconds(start_time_str)
+        end_sec = _srt_time_to_seconds(end_time_str)
+        duration_sec = end_sec - start_sec
+        if duration_sec <= 0:
+            return None
+
+        # 用 ffmpeg 精确截取片段到临时文件
+        os.makedirs(TEMP_DIR, exist_ok=True)
+        temp_seg = os.path.join(TEMP_DIR, f"orig_{number}.wav")
+        import subprocess as sp
+        sp.run([
+            'ffmpeg', '-y',
+            '-ss', str(start_sec),
+            '-i', source_audio,
+            '-t', str(duration_sec),
+            '-ar', '16000',
+            '-ac', '1',
+            temp_seg
+        ], capture_output=True, check=True)
+
+        audio = AudioSegment.from_wav(temp_seg)
+        buf = BytesIO()
+        audio.export(buf, format="wav")
+        buf.seek(0)
+        # 清理临时文件
+        try:
+            os.remove(temp_seg)
+        except Exception:
+            pass
+        return buf
+    except Exception:
+        return None
 
 
 def save_uploaded_ref_file(uploaded_file, ref_num: int) -> Optional[str]:
@@ -725,6 +865,10 @@ def main():
         # 搜索框
         search_text = st.text_input("🔍 搜索片段内容", placeholder="输入原文或译文关键词...")
 
+    # 加载 SRT 条目（缓存），供下方保存按钮和展示循环使用
+    src_srt_entries = _cached_load_src_srt()
+    trans_srt_entries = _cached_load_trans_srt()
+
     # ── 保存全部按钮 ──
     save_all_col1, save_all_col2 = st.columns([3, 1])
     with save_all_col1:
@@ -738,10 +882,17 @@ def main():
                     lines_list = parse_lines(row['lines'])
                     ref_lines_old = parse_lines(row.get('ref_lines', ''))
 
+                    # 获取该片段在 trans.srt 中匹配的译文文本（作为默认值）
+                    seg_start_srt = row.get('start_time', '')
+                    seg_end_srt = row.get('end_time', '')
+                    matched_trans_texts = get_srt_texts_by_segment(trans_srt_entries, seg_start_srt, seg_end_srt)
+                    num_lines = len(matched_trans_texts) if matched_trans_texts else len(lines_list)
+
                     edited_lines = []
                     new_ref_lines = []
-                    for i in range(len(lines_list)):
-                        trans_val = st.session_state.get(f"trans_{number}_{i}", lines_list[i])
+                    for i in range(num_lines):
+                        default_text = matched_trans_texts[i] if i < len(matched_trans_texts) else (lines_list[i] if i < len(lines_list) else '')
+                        trans_val = st.session_state.get(f"trans_{number}_{i}", default_text)
                         ref_val = st.session_state.get(f"ref_line_{number}_{i}", ref_lines_old[i] if i < len(ref_lines_old) else '1')
                         edited_lines.append(trans_val)
                         new_ref_lines.append(ref_val)
@@ -760,14 +911,22 @@ def main():
 
     # 遍历每个片段
     found_any = False
+    # src_srt_entries / trans_srt_entries 已在上方加载
+
     for idx, row in df.iterrows():
         number = row['number']
         lines_list = parse_lines(row['lines'])
-        src_lines_list = parse_lines(row['src_lines'])
         cut_off = row.get('cut_off', 0)
         ref_lines = parse_lines(row.get('ref_lines', ''))
         if not ref_lines or len(ref_lines) != len(lines_list):
             ref_lines = ['1'] * len(lines_list) if lines_list else []
+
+        # 从 SRT 文件按时间戳匹配原文和译文（以 start_time 和 end_time 为时间区间）
+        # 使用左开右闭区间 (seg_start < end_sec <= seg_end) 避免相邻片段的边界重复匹配
+        seg_start_srt = row.get('start_time', '')
+        seg_end_srt = row.get('end_time', '')
+        matched_src_texts = get_srt_texts_by_segment(src_srt_entries, seg_start_srt, seg_end_srt)
+        matched_trans_texts = get_srt_texts_by_segment(trans_srt_entries, seg_start_srt, seg_end_srt)
 
         # 检查音频状态
         all_generated, audio_paths, combined_audio = get_segment_status(number, lines_list)
@@ -778,10 +937,10 @@ def main():
         if status_filter == "未配音" and all_generated:
             continue
 
-        # 应用搜索
+        # 应用搜索（同时搜索 SRT 匹配的原文和 SRT 匹配的译文）
         if search_text:
-            src_text = ' '.join(src_lines_list) if src_lines_list else ''
-            trans_text = ' '.join(lines_list) if lines_list else ''
+            src_text = ' '.join(matched_src_texts) if matched_src_texts else ''
+            trans_text = ' '.join(matched_trans_texts) if matched_trans_texts else ''
             if search_text.lower() not in src_text.lower() and search_text.lower() not in trans_text.lower():
                 continue
 
@@ -819,26 +978,28 @@ def main():
                 col_src, col_trans = st.columns(2)
 
                 with col_src:
-                    st.markdown("**🔤 原文 (src_lines):**")
-                    if src_lines_list:
-                        for i, sl in enumerate(src_lines_list):
+                    st.markdown("**🔤 原文 (从 SRT 按时间匹配):**")
+                    if matched_src_texts:
+                        for i, sl in enumerate(matched_src_texts):
                             st.markdown(f">  [{i + 1}] {sl}")
                     else:
                         st.caption("(空)")
 
                 with col_trans:
-                    st.markdown("**🌐 译文 (lines):**")
-                    if lines_list:
+                    st.markdown("**🌐 译文 (从 SRT 按时间匹配，可编辑):**")
+                    if matched_trans_texts:
                         ref_status = get_ref_status()
                         ref1_ok = ref_status['1']['exists']
                         ref2_ok = ref_status['2']['exists']
 
-                        for i, ll in enumerate(lines_list):
+                        for i, ll in enumerate(matched_trans_texts):
                             line_cols = st.columns([3, 1])
                             with line_cols[0]:
+                                # 从 session_state 读取已编辑的值，否则用 SRT 匹配的默认值
+                                default_val = st.session_state.get(f"trans_{number}_{i}", ll)
                                 st.text_input(
                                     f"第 {i + 1} 行",
-                                    value=ll,
+                                    value=default_val,
                                     key=f"trans_{number}_{i}",
                                     label_visibility="collapsed",
                                     placeholder="输入译文...",
@@ -869,7 +1030,7 @@ def main():
                         st.caption("(空)")
 
             # 操作区
-            op_col1, op_col2, op_col3, op_col4, op_col5 = st.columns([1, 1, 1, 2, 3])
+            op_col1, op_col2, op_col3, op_col4, op_col5, op_col6 = st.columns([1, 1, 1, 2, 2, 2])
 
             with op_col1:
                 # 配音（首次 / 覆盖）
@@ -930,7 +1091,8 @@ def main():
                             st.rerun()
 
             with op_col4:
-                # 播放音频
+                # 配音音频播放器
+                st.caption("🎤 配音")
                 if all_generated and combined_audio:
                     audio_html = get_audio_player(combined_audio)
                     st.markdown(audio_html, unsafe_allow_html=True)
@@ -948,13 +1110,30 @@ def main():
                             audio_html = get_audio_player(buf)
                             st.markdown(audio_html, unsafe_allow_html=True)
                         else:
-                            st.caption("无音频可播放")
+                            st.caption("无音频")
                     except Exception:
-                        st.caption("无音频可播放")
+                        st.caption("无音频")
                 else:
                     st.caption("暂无音频")
 
             with op_col5:
+                # 原音音频播放器
+                st.caption("🔊 原音")
+                try:
+                    orig_audio_buf = get_original_audio_segment(
+                        number,
+                        row.get('start_time', ''),
+                        row.get('end_time', '')
+                    )
+                    if orig_audio_buf:
+                        audio_html = get_audio_player(orig_audio_buf)
+                        st.markdown(audio_html, unsafe_allow_html=True)
+                    else:
+                        st.caption("无原音")
+                except Exception:
+                    st.caption("无原音")
+
+            with op_col6:
                 # 显示每行音频时长信息
                 if all_generated and audio_paths:
                     durations = []

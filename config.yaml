@@ -58,8 +58,8 @@ subtitle:
   # *Translated subtitles are slightly larger than source subtitles, affecting the reference length for subtitle splitting
   target_multiplier: 1.2
   font: 'Microsoft YaHei'     # 默认字体
-  trans_color_hex: '#e4aa70'  # 网页显示的 Hex 颜色
-  trans_color: '&H70aae4'     # FFmpeg 使用的 ASS 颜色
+  trans_color_hex: '#707ce4'  # 网页显示的 Hex 颜色
+  trans_color: '&He47c70'     # FFmpeg 使用的 ASS 颜色
   use_bg: false # 默认开启背景  
   font_size: 10  # 默认翻译字幕字号
 # *Summary length, set low to 2k if using local LLM
