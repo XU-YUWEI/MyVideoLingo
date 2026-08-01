@@ -186,17 +186,34 @@ def parse_lines(raw):
     return []
 
 
+def _invalidate_audio_cache(number: int = None):
+    """清除指定片段（或全部片段）的音频状态缓存和时长缓存，供 dub/delete 操作后调用"""
+    if number is not None:
+        st.session_state.pop(f"_audio_status_{number}", None)
+        st.session_state.pop(f"_audio_durations_{number}", None)
+        # 原音缓存（_orig_audio_*）不清除，因为原音文件不会因配音而改变
+    else:
+        for key in list(st.session_state.keys()):
+            if key.startswith("_audio_status_") or key.startswith("_audio_durations_"):
+                del st.session_state[key]
+
+
 def get_segment_status(number: int, lines_list: list) -> tuple:
     """
-    检查某个片段的音频生成状态。
+    检查某个片段的音频生成状态（带 session_state 缓存，避免重复 I/O）。
     返回 (all_generated: bool, audio_paths: list, combined_audio: Optional[BytesIO])
     """
+    # ── 缓存命中：相同 segment number + 相同行数，直接返回 ──
+    cache_key = f"_audio_status_{number}"
+    cached = st.session_state.get(cache_key)
+    if cached is not None and cached.get('lines_len') == len(lines_list):
+        return cached['all_generated'], cached['audio_paths'], cached['combined']
+
     os.makedirs(TEMP_DIR, exist_ok=True)
     audio_paths = []
     all_generated = True
 
     for line_idx in range(len(lines_list)):
-        # 先检查 segs 目录（最终文件），再检查 tmp 目录（临时文件）
         seg_path = os.path.join(SEGS_DIR, f"{number}_{line_idx}.wav")
         tmp_path = os.path.join(TEMP_DIR, f"{number}_{line_idx}_temp.wav")
 
@@ -206,7 +223,6 @@ def get_segment_status(number: int, lines_list: list) -> tuple:
             audio_paths.append(tmp_path)
         else:
             all_generated = False
-            # 仍然加入占位，后续生成
             audio_paths.append(None)
 
     # 如果所有音频都已生成，尝试合并为一个 AudioSegment 用于播放
@@ -223,6 +239,14 @@ def get_segment_status(number: int, lines_list: list) -> tuple:
             combined = buf
         except Exception:
             combined = None
+
+    # ── 写入缓存 ──
+    st.session_state[cache_key] = {
+        'lines_len': len(lines_list),
+        'all_generated': all_generated,
+        'audio_paths': audio_paths,
+        'combined': combined,
+    }
 
     return all_generated, audio_paths, combined
 
@@ -325,7 +349,14 @@ def get_original_audio_segment(number: int, start_time_str: str, end_time_str: s
     获取指定片段的原音音频，返回 BytesIO 供播放器使用。
     优先使用已提取的参考音频文件 (output/audio/refers/{number}.wav)，
     若不存在则从原始音频文件中实时截取。
+
+    结果缓存到 session_state（原音文件不会变化，只需加载一次）。
     """
+    cache_key = f"_orig_audio_{number}"
+    cached = st.session_state.get(cache_key)
+    if cached is not None:
+        return cached
+
     ref_path = os.path.join(_AUDIO_REFERS_DIR, f"{number}.wav")
     if os.path.exists(ref_path):
         try:
@@ -333,6 +364,7 @@ def get_original_audio_segment(number: int, start_time_str: str, end_time_str: s
             buf = BytesIO()
             audio.export(buf, format="wav")
             buf.seek(0)
+            st.session_state[cache_key] = buf
             return buf
         except Exception:
             pass
@@ -344,6 +376,7 @@ def get_original_audio_segment(number: int, start_time_str: str, end_time_str: s
             source_audio = src
             break
     if source_audio is None:
+        st.session_state[cache_key] = None
         return None
 
     try:
@@ -351,6 +384,7 @@ def get_original_audio_segment(number: int, start_time_str: str, end_time_str: s
         end_sec = _srt_time_to_seconds(end_time_str)
         duration_sec = end_sec - start_sec
         if duration_sec <= 0:
+            st.session_state[cache_key] = None
             return None
 
         # 用 ffmpeg 精确截取片段到临时文件
@@ -376,8 +410,10 @@ def get_original_audio_segment(number: int, start_time_str: str, end_time_str: s
             os.remove(temp_seg)
         except Exception:
             pass
+        st.session_state[cache_key] = buf
         return buf
     except Exception:
+        st.session_state[cache_key] = None
         return None
 
 
@@ -445,7 +481,6 @@ def main():
                 if st.button("🗑️ 清除参考1", key="clear_ref1"):
                     if os.path.exists(USER_REF_1_PATH):
                         os.remove(USER_REF_1_PATH)
-                        st.cache_data.clear()
                         st.rerun()
             else:
                 st.warning("❌ 未上传")
@@ -459,7 +494,6 @@ def main():
                 path = save_uploaded_ref_file(uploaded_1, 1)
                 if path:
                     st.success(f"✅ 参考1 已保存: {path}")
-                    st.cache_data.clear()
                     st.rerun()
 
         with ref_col2:
@@ -470,7 +504,6 @@ def main():
                 if st.button("🗑️ 清除参考2", key="clear_ref2"):
                     if os.path.exists(USER_REF_2_PATH):
                         os.remove(USER_REF_2_PATH)
-                        st.cache_data.clear()
                         st.rerun()
             else:
                 st.warning("❌ 未上传")
@@ -484,7 +517,6 @@ def main():
                 path = save_uploaded_ref_file(uploaded_2, 2)
                 if path:
                     st.success(f"✅ 参考2 已保存: {path}")
-                    st.cache_data.clear()
                     st.rerun()
 
     st.markdown("---")
@@ -506,7 +538,7 @@ def main():
                         gen_audio_task_main()
                         gen_dub_chunks()
                         st.success("✅ 音频任务生成完成！")
-                        st.cache_data.clear()
+                        _cached_load_tasks.clear()
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ 生成音频任务失败: {e}")
@@ -560,7 +592,7 @@ def main():
                     from core._10_gen_audio import gen_audio
                     gen_audio()
                     st.success("✅ 全部音频生成完成！")
-                    st.cache_data.clear()
+                    _invalidate_audio_cache()
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ 全部配音失败: {e}")
@@ -621,7 +653,7 @@ def main():
                             st.success(f"✅ 补齐完成！成功生成 {success_count} 个片段。")
                         else:
                             st.warning(f"⚠️ 补齐完成。成功: {success_count}, 失败: {fail_count}")
-                    st.cache_data.clear()
+                    _invalidate_audio_cache()
                     st.rerun()
 
     with action_col3:
@@ -632,7 +664,7 @@ def main():
                     from core._8_2_dub_chunks import gen_dub_chunks
                     gen_dub_chunks()
                     st.success("✅ 配音任务重新生成完成！")
-                    st.cache_data.clear()
+                    _cached_load_tasks.clear()
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ 重新生成失败: {e}")
@@ -647,7 +679,7 @@ def main():
                     gen_audio_task_main()
                     gen_dub_chunks()
                     st.success("✅ 音频任务生成完成！")
-                    st.cache_data.clear()
+                    _cached_load_tasks.clear()
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ 生成音频任务失败: {e}")
@@ -707,7 +739,7 @@ def main():
                         st.success(f"✅ 批量配音完成！成功生成 {success_count} 个片段（已删除 {total_del} 个旧文件）。")
                     else:
                         st.warning(f"⚠️ 批量配音完成。成功: {success_count}, 失败: {fail_count}（已删除 {total_del} 个旧文件）。")
-                st.cache_data.clear()
+                _invalidate_audio_cache()
                 st.rerun()
 
     with action_col6:
@@ -722,7 +754,7 @@ def main():
                 st.success(f"✅ 已删除全部配音文件，共 {deleted} 个文件。")
             else:
                 st.info("没有找到可删除的配音文件。")
-            st.cache_data.clear()
+            _invalidate_audio_cache()
             st.rerun()
 
     # ── 合并到视频 ──
@@ -751,7 +783,6 @@ def main():
             burn_on = st.toggle("烧录字幕", value=current_burn if current_burn is not None else True)
             if burn_on != current_burn:
                 update_key("burn_subtitles", burn_on)
-                st.rerun()
 
             if burn_on:
                 sub_font_col1, sub_font_col2 = st.columns(2)
@@ -766,14 +797,12 @@ def main():
                     selected_font = st.selectbox("字幕字体", options=all_fonts, index=font_idx)
                     if selected_font != current_font:
                         update_key("subtitle.font", selected_font)
-                        st.rerun()
 
                     # 字号
                     current_size = load_key("subtitle.font_size") or 17
                     selected_size = st.number_input("字体大小", min_value=10, max_value=100, value=int(current_size), step=1)
                     if selected_size != current_size:
                         update_key("subtitle.font_size", selected_size)
-                        st.rerun()
 
                 with sub_font_col2:
                     # 字体颜色
@@ -783,14 +812,12 @@ def main():
                         update_key("subtitle.trans_color_hex", selected_color)
                         ass_color = f"&H{selected_color[5:7]}{selected_color[3:5]}{selected_color[1:3]}"
                         update_key("subtitle.trans_color", ass_color)
-                        st.rerun()
 
                     # 字幕背景开关
                     current_bg = load_key("subtitle.use_bg") if load_key("subtitle.use_bg") is not None else True
                     use_bg = st.toggle("字幕背景", value=current_bg)
                     if use_bg != current_bg:
                         update_key("subtitle.use_bg", use_bg)
-                        st.rerun()
 
             # ── 配音音量调节 ──
             with st.container():
@@ -830,7 +857,6 @@ def main():
                     size_mb = os.path.getsize(DUB_VIDEO) / (1024 * 1024)
                     st.info(f"📁 输出文件: `{DUB_VIDEO}` ({size_mb:.1f} MB)")
 
-                st.cache_data.clear()
                 st.rerun()
             except Exception as e:
                 st.error(f"❌ 合并/合成失败: {e}")
@@ -891,8 +917,9 @@ def main():
                     edited_lines = []
                     new_ref_lines = []
                     for i in range(num_lines):
-                        default_text = matched_trans_texts[i] if i < len(matched_trans_texts) else (lines_list[i] if i < len(lines_list) else '')
-                        trans_val = st.session_state.get(f"trans_{number}_{i}", default_text)
+                        # 回退到 Excel 中最后保存的值，绝不回退到 SRT 原始文本
+                        saved_text = lines_list[i] if i < len(lines_list) else ''
+                        trans_val = st.session_state.get(f"trans_{number}_{i}", saved_text)
                         ref_val = st.session_state.get(f"ref_line_{number}_{i}", ref_lines_old[i] if i < len(ref_lines_old) else '1')
                         edited_lines.append(trans_val)
                         new_ref_lines.append(ref_val)
@@ -902,9 +929,8 @@ def main():
                     saved_count += 1
 
                 df.to_excel(TASKS_FILE, index=False)
-                st.cache_data.clear()
+                _cached_load_tasks.clear()
                 st.success(f"✅ 已保存全部 {saved_count} 个片段的译文和参考选择！")
-                st.rerun()
             except Exception as e:
                 st.error(f"❌ 保存失败: {e}")
     st.markdown("---")
@@ -995,8 +1021,10 @@ def main():
                         for i, ll in enumerate(matched_trans_texts):
                             line_cols = st.columns([3, 1])
                             with line_cols[0]:
-                                # 从 session_state 读取已编辑的值，否则用 SRT 匹配的默认值
-                                default_val = st.session_state.get(f"trans_{number}_{i}", ll)
+                                # 优先级：session_state（编辑中）> Excel lines_list（已保存）> SRT 匹配文本（原始）
+                                saved_val = lines_list[i] if i < len(lines_list) else ''
+                                display_val = saved_val or ll
+                                default_val = st.session_state.get(f"trans_{number}_{i}", display_val)
                                 st.text_input(
                                     f"第 {i + 1} 行",
                                     value=default_val,
@@ -1026,6 +1054,31 @@ def main():
                                     key=f"ref_line_{number}_{i}",
                                     label_visibility="collapsed",
                                 )
+
+                        # ── 片段级独立保存按钮 ──
+                        st.markdown("---")
+                        save_col1, save_col2 = st.columns([1, 3])
+                        with save_col1:
+                            if st.button(f"💾 保存片段 #{number}", key=f"save_seg_{number}", use_container_width=True):
+                                try:
+                                    edited_lines = []
+                                    new_ref_lines = []
+                                    for i in range(len(matched_trans_texts)):
+                                        trans_key = f"trans_{number}_{i}"
+                                        ref_key = f"ref_line_{number}_{i}"
+                                        trans_val = st.session_state.get(trans_key, matched_trans_texts[i])
+                                        ref_val = st.session_state.get(ref_key, ref_lines[i] if i < len(ref_lines) else '1')
+                                        edited_lines.append(trans_val)
+                                        new_ref_lines.append(ref_val)
+                                    df.at[idx, 'lines'] = str(edited_lines)
+                                    df.at[idx, 'ref_lines'] = str(new_ref_lines)
+                                    df.to_excel(TASKS_FILE, index=False)
+                                    _cached_load_tasks.clear()
+                                    st.success(f"✅ 片段 #{number} 译文已保存！")
+                                except Exception as e:
+                                    st.error(f"❌ 保存失败: {e}")
+                        with save_col2:
+                            st.caption("保存后刷新，译文将持久化")
                     else:
                         st.caption("(空)")
 
@@ -1042,6 +1095,7 @@ def main():
                         with st.spinner(f"正在为片段 #{number} 生成音频 ({len(lines_list)} 行)..."):
                             ok = redub_single_segment(number, lines_list, df, ref_lines=ref_lines)
                             if ok:
+                                _invalidate_audio_cache(number)
                                 st.success(f"✅ 片段 #{number} 配音完成！")
                                 st.rerun()
                             else:
@@ -1063,13 +1117,14 @@ def main():
                                 with st.spinner(f"正在重新配音片段 #{number} ({len(lines_list)} 行)..."):
                                     ok = redub_single_segment(number, lines_list, df, ref_lines=ref_lines)
                                     if ok:
+                                        _invalidate_audio_cache(number)
                                         st.success(f"✅ 片段 #{number} 重新配音完成！")
                                         st.rerun()
                                     else:
                                         st.error(f"❌ 重新配音失败。")
                     with col_no:
                         if st.button("❌ 取消", key=f"redub_cancel_{number}", use_container_width=True):
-                            st.rerun()
+                            pass
 
             with op_col3:
                 # 删除配音（带确认）
@@ -1081,6 +1136,7 @@ def main():
                     with col_yes:
                         if st.button("✅ 确认删除", key=f"del_confirm_{number}", use_container_width=True):
                             deleted = delete_segment_audio(number, lines_list)
+                            _invalidate_audio_cache(number)
                             if deleted > 0:
                                 st.success(f"✅ 已删除 {deleted} 个音频文件")
                             else:
@@ -1088,7 +1144,7 @@ def main():
                             st.rerun()
                     with col_no:
                         if st.button("❌ 取消", key=f"del_cancel_{number}", use_container_width=True):
-                            st.rerun()
+                            pass
 
             with op_col4:
                 # 配音音频播放器
@@ -1134,13 +1190,19 @@ def main():
                     st.caption("无原音")
 
             with op_col6:
-                # 显示每行音频时长信息
+                # 显示每行音频时长信息（带 session_state 缓存，避免重复运行 ffmpeg）
                 if all_generated and audio_paths:
-                    durations = []
-                    for ap in audio_paths:
-                        if ap and os.path.exists(ap):
-                            d = get_audio_duration(ap)
-                            durations.append(d)
+                    dur_cache_key = f"_audio_durations_{number}"
+                    cached_durs = st.session_state.get(dur_cache_key)
+                    if cached_durs is not None and len(cached_durs) == len(audio_paths):
+                        durations = cached_durs
+                    else:
+                        durations = []
+                        for ap in audio_paths:
+                            if ap and os.path.exists(ap):
+                                d = get_audio_duration(ap)
+                                durations.append(d)
+                        st.session_state[dur_cache_key] = durations
                     total_dur = sum(durations)
                     dur_str = " + ".join(f"{d:.2f}s" for d in durations)
                     st.caption(f"📊 各句时长: {dur_str} = **{total_dur:.2f}s**")
