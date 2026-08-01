@@ -45,7 +45,8 @@ def transcribe_audio(raw_audio_file, vocal_audio_file, start, end):
     if device == "cuda":
         gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
         batch_size = 16 if gpu_mem > 8 else 2
-        compute_type = "float16" if torch.cuda.is_bf16_supported() else "int8"
+        # 低显存显卡（<8GB）用 int8：float16 下 large-v3 等大模型会 OOM（已在 6GB 显卡实测）
+        compute_type = "float16" if (torch.cuda.is_bf16_supported() and gpu_mem >= 8) else "int8"
         rprint(f"[cyan]🎮 GPU memory:[/cyan] {gpu_mem:.2f} GB, [cyan]📦 Batch size:[/cyan] {batch_size}, [cyan]⚙️ Compute type:[/cyan] {compute_type}")
     else:
         batch_size = 1
@@ -74,7 +75,13 @@ def transcribe_audio(raw_audio_file, vocal_audio_file, start, end):
         rprint(f"[green]📥 Using WHISPER model from HuggingFace:[/green] {model_name} ...")
 
     vad_options = {"vad_onset": 0.500,"vad_offset": 0.363}
-    asr_options = {"temperatures": [0],"initial_prompt": "",}
+    # 抑制 Whisper 幻觉重复（如连续输出 "Wait! Wait! Wait!..." 循环）：
+    # no_repeat_ngram_size=4 阻止 4-gram 的重复生成，对正常重复对白影响很小
+    asr_options = {
+        "temperatures": [0],
+        "initial_prompt": "",
+        "no_repeat_ngram_size": 4,
+    }
     whisper_language = None if 'auto' in WHISPER_LANGUAGE else WHISPER_LANGUAGE
     rprint("[bold yellow] You can ignore warning of `Model was trained with torch 1.10.0+cu102, yours is 2.0.0+cu118...`[/bold yellow]")
     model = whisperx.load_model(model_name, device, compute_type=compute_type, language=whisper_language, vad_options=vad_options, asr_options=asr_options, download_root=MODEL_DIR)

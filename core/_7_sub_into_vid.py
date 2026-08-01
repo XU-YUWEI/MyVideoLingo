@@ -120,28 +120,27 @@ def merge_subtitles_to_video():
 
     ffmpeg_gpu = load_key("ffmpeg_gpu")
     if ffmpeg_gpu:
-        rprint("[bold green]will use GPU acceleration (NVENC) with high quality settings.[/bold green]")
+        rprint("[bold green]will use GPU acceleration (NVENC) with quality-based settings.[/bold green]")
         ffmpeg_cmd.extend([
             '-c:v', 'h264_nvenc',
-            '-cq', '17',          # 恒定质量模式，值越低质量越高（0-51），17为高质量
-            '-preset', 'p7',      # p7 是 NVENC 最高质量预设
-            '-rc', 'vbr',         # 可变码率
-            '-b:v', '50M',        # 最大码率 50 Mbps
-            '-maxrate', '80M',    # 峰值码率 80 Mbps
-            '-bufsize', '80M',    # 缓冲区大小
+            '-preset', 'p5',      # 质量与速度均衡
+            '-rc', 'vbr',
+            '-cq', '23',          # 恒定质量（0-51，越低质量越高），23 为画质与体积的平衡点
+            '-b:v', '4M',         # 平均码率上限 4Mbps，防止输出文件过大（原 50M 会产生数百 MB~GB 级文件导致 Streamlit 内存崩溃）
+            '-maxrate', '6M',     # 峰值码率上限
+            '-bufsize', '6M',
             '-pix_fmt', 'yuv420p'
         ])
     else:
-        rprint("[bold green]Using CPU encoding with high quality settings (libx264 CRF 17).[/bold green]")
+        rprint("[bold green]Using CPU encoding (libx264 CRF 23).[/bold green]")
         ffmpeg_cmd.extend([
             '-c:v', 'libx264',
-            '-crf', '17',         # CRF 17 = 视觉无损（0-51，越低越好，0=无损）
-            '-preset', 'slow',    # slow 预设提供更好的压缩效率
+            '-crf', '23',         # CRF 23：画质与体积平衡（原 17 接近无损，文件极大）
+            '-preset', 'medium',  # medium 预设兼顾速度与压缩率
+            '-maxrate', '6M',     # 峰值码率上限，避免输出文件过大
+            '-bufsize', '6M',
             '-pix_fmt', 'yuv420p'
         ])
-        # 如果能获取到源视频码率，使用其作为最大码率限制
-        if src_bitrate and src_bitrate != 'N/A' and src_bitrate.isdigit():
-            ffmpeg_cmd.extend(['-maxrate', f'{int(src_bitrate)//1000}k'])
     ffmpeg_cmd.extend(['-y', OUTPUT_VIDEO])
 
     rprint("🎬 Start merging subtitles to video...")

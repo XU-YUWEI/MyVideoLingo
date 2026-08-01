@@ -29,7 +29,7 @@ whisper:
   model: 'small'
   # Whisper specified recognition language ISO 639-1
   language: 'en'
-  model_size: 'small'
+  model_size: 'large-v3'
   detected_language: 'en'
   # Whisper running mode ["local", "cloud", "elevenlabs"]. Specifies where to run, cloud uses 302.ai API
   runtime: 'local'
