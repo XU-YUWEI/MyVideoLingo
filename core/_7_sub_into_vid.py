@@ -87,12 +87,29 @@ def merge_subtitles_to_video():
     TARGET_HEIGHT = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
     video.release()
     rprint(f"[bold green]Video resolution: {TARGET_WIDTH}x{TARGET_HEIGHT}[/bold green]")
+    # 获取源视频的编码格式，尽量保持一致性
+    probe_cmd = [
+        'ffprobe', '-v', 'error', '-select_streams', 'v:0',
+        '-show_entries', 'stream=codec_name,bit_rate',
+        '-of', 'csv=p=0', video_file
+    ]
+    try:
+        probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=10)
+        probe_output = probe_result.stdout.strip().split(',')
+        src_codec = probe_output[0] if len(probe_output) > 0 else ''
+        src_bitrate = probe_output[1] if len(probe_output) > 1 else ''
+        rprint(f"[bold green]Source video codec: {src_codec}, bitrate: {src_bitrate}[/bold green]")
+    except Exception as e:
+        src_codec = ''
+        src_bitrate = ''
+        rprint(f"[bold yellow]Could not probe source video: {e}[/bold yellow]")
+
     ffmpeg_cmd = [
         'ffmpeg', '-i', video_file,
         '-vf', (
             f"scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=decrease,"
             f"pad={TARGET_WIDTH}:{TARGET_HEIGHT}:(ow-iw)/2:(oh-ih)/2,"
-            f"subtitles={SRC_SRT}:force_style='FontSize={SRC_FONT_SIZE},FontName={SRC_FONT_NAME}," 
+            f"subtitles={SRC_SRT}:force_style='FontSize={SRC_FONT_SIZE},FontName={SRC_FONT_NAME},"
             f"PrimaryColour={SRC_FONT_COLOR},OutlineColour={SRC_OUTLINE_COLOR},OutlineWidth={SRC_OUTLINE_WIDTH},"
             f"ShadowColour={SRC_SHADOW_COLOR},BorderStyle=1',"
             f"subtitles={TRANS_SRT}:force_style='FontSize={trans_font_size},FontName={font_name},"
@@ -103,8 +120,28 @@ def merge_subtitles_to_video():
 
     ffmpeg_gpu = load_key("ffmpeg_gpu")
     if ffmpeg_gpu:
-        rprint("[bold green]will use GPU acceleration.[/bold green]")
-        ffmpeg_cmd.extend(['-c:v', 'h264_nvenc'])
+        rprint("[bold green]will use GPU acceleration (NVENC) with high quality settings.[/bold green]")
+        ffmpeg_cmd.extend([
+            '-c:v', 'h264_nvenc',
+            '-cq', '17',          # 恒定质量模式，值越低质量越高（0-51），17为高质量
+            '-preset', 'p7',      # p7 是 NVENC 最高质量预设
+            '-rc', 'vbr',         # 可变码率
+            '-b:v', '50M',        # 最大码率 50 Mbps
+            '-maxrate', '80M',    # 峰值码率 80 Mbps
+            '-bufsize', '80M',    # 缓冲区大小
+            '-pix_fmt', 'yuv420p'
+        ])
+    else:
+        rprint("[bold green]Using CPU encoding with high quality settings (libx264 CRF 17).[/bold green]")
+        ffmpeg_cmd.extend([
+            '-c:v', 'libx264',
+            '-crf', '17',         # CRF 17 = 视觉无损（0-51，越低越好，0=无损）
+            '-preset', 'slow',    # slow 预设提供更好的压缩效率
+            '-pix_fmt', 'yuv420p'
+        ])
+        # 如果能获取到源视频码率，使用其作为最大码率限制
+        if src_bitrate and src_bitrate != 'N/A' and src_bitrate.isdigit():
+            ffmpeg_cmd.extend(['-maxrate', f'{int(src_bitrate)//1000}k'])
     ffmpeg_cmd.extend(['-y', OUTPUT_VIDEO])
 
     rprint("🎬 Start merging subtitles to video...")

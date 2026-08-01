@@ -96,13 +96,48 @@ def merge_video_audio():
         f'[bg][dub]amix=inputs=2:duration=first:dropout_transition=3[a]'
     ]
 
+    # 探查源视频编码信息，尽可能保持画质
+    probe_cmd = [
+        'ffprobe', '-v', 'error', '-select_streams', 'v:0',
+        '-show_entries', 'stream=codec_name,bit_rate',
+        '-of', 'csv=p=0', VIDEO_FILE
+    ]
+    try:
+        probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=10)
+        probe_output = probe_result.stdout.strip().split(',')
+        src_codec = probe_output[0] if len(probe_output) > 0 else ''
+        src_bitrate = probe_output[1] if len(probe_output) > 1 else ''
+        rprint(f"[bold green]Source video codec: {src_codec}, bitrate: {src_bitrate}[/bold green]")
+    except Exception as e:
+        src_codec = ''
+        src_bitrate = ''
+        rprint(f"[bold yellow]Could not probe source video: {e}[/bold yellow]")
+
     if load_key("ffmpeg_gpu"):
-        rprint("[bold green]Using GPU acceleration...[/bold green]")
-        cmd.extend(['-map', '[v]', '-map', '[a]', '-c:v', 'h264_nvenc'])
+        rprint("[bold green]Using GPU acceleration (NVENC) with high quality settings...[/bold green]")
+        cmd.extend(['-map', '[v]', '-map', '[a]',
+            '-c:v', 'h264_nvenc',
+            '-cq', '17',          # 恒定质量模式，值越低质量越高
+            '-preset', 'p7',      # NVENC 最高质量预设
+            '-rc', 'vbr',         # 可变码率
+            '-b:v', '50M',        # 最大码率 50 Mbps
+            '-maxrate', '80M',    # 峰值码率 80 Mbps
+            '-bufsize', '80M',    # 缓冲区大小
+            '-pix_fmt', 'yuv420p'
+        ])
     else:
-        cmd.extend(['-map', '[v]', '-map', '[a]'])
+        rprint("[bold green]Using CPU encoding with high quality settings (libx264 CRF 17)...[/bold green]")
+        cmd.extend(['-map', '[v]', '-map', '[a]',
+            '-c:v', 'libx264',
+            '-crf', '17',         # CRF 17 = 视觉无损
+            '-preset', 'slow',    # slow 预设提供更好的压缩效率
+            '-pix_fmt', 'yuv420p'
+        ])
+        # 如果能获取到源视频码率，使用其作为最大码率限制
+        if src_bitrate and src_bitrate != 'N/A' and src_bitrate.isdigit():
+            cmd.extend(['-maxrate', f'{int(src_bitrate)//1000}k'])
     
-    cmd.extend(['-c:a', 'aac', '-b:a', '96k', DUB_VIDEO])
+    cmd.extend(['-c:a', 'aac', '-b:a', '192k', DUB_VIDEO])  # 提高音频码率至192k
     
     subprocess.run(cmd)
     rprint(f"[bold green]Video and audio successfully merged into {DUB_VIDEO}[/bold green]")
