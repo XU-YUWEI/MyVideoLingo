@@ -11,6 +11,7 @@ import os
 import sys
 import base64
 import shutil
+import re
 import concurrent.futures
 from io import BytesIO
 from typing import Optional
@@ -87,6 +88,8 @@ def parse_srt_entries(srt_path: str) -> list:
             start_sec = _srt_time_to_seconds(start_str)
             end_sec = _srt_time_to_seconds(end_str)
             text = ' '.join(lines[2:])
+            # 剥离行首 [角色N] 标记，避免作为默认译文进入 TTS
+            text = re.sub(r'^\[[^\]]*\]\s*', '', text)
             entries.append((start_sec, end_sec, text))
         except Exception:
             continue

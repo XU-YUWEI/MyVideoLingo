@@ -25,15 +25,13 @@ ERROR_OUTPUT_DIR = 'batch/output/ERROR'
 INPUT_DIR = 'batch/input'
 
 # ── 调试器初始化（模块级，仅在主动开启时生效）──
-# 开启方式：将下面这行取消注释即可
-# 关闭方式：保持下面代码块注释，或删除本块
+# 开启方式：设置环境变量 VIDEOLINGO_DEBUG=1（例如：set VIDEOLINGO_DEBUG=1）
+# 关闭方式：不设置该环境变量即可（默认）
 # 用法：先运行脚本，然后在 VS Code 按 F5 选择 "Attach to Running VideoLingo"
-if os.environ.get("VIDEOLINGO_DEBUG") == "1" or not hasattr(sys, '_debugpy_listen_called'):
+if os.environ.get("VIDEOLINGO_DEBUG") == "1":
     try:
         debugpy.listen(5678)
-        sys._debugpy_listen_called = True
         print("[debug] 🟢 调试器已启动，等待 VS Code 附加到 localhost:5678 ...")
-        # 如需在入口处暂停等待附加，取消下面一行的注释
         debugpy.wait_for_client()
         print("[debug] 🔵 继续执行（可在 VS Code 中随时设置断点）")
     except Exception as e:

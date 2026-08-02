@@ -41,8 +41,8 @@ def text_processing_section():
 
         if not os.path.exists(SUB_VIDEO):
             if st.button(t("Start Processing Subtitles"), key="text_processing_button"):
-                process_text()
-                st.rerun()
+                if process_text():
+                    st.rerun()
         else:
             if load_key("burn_subtitles"):
                 st.video(SUB_VIDEO)
@@ -54,24 +54,40 @@ def text_processing_section():
             return True
 
 def process_text():
-    with st.spinner(t("Using Whisper for transcription...")):
-        _2_asr.transcribe()
-    with st.spinner(t("Splitting long sentences...")):  
-        _3_1_split_nlp.split_by_spacy()
-        _3_2_split_meaning.split_sentences_by_meaning()
-    with st.spinner(t("Summarizing and translating...")):
+    """执行字幕处理管线；某一步失败时在页面上明确报错并返回 False（不 rerun，保留错误提示）"""
+    def _run(step_name, step_func):
+        print(f"[VideoLingo] 步骤开始: {step_name}", flush=True)
+        try:
+            with st.spinner(step_name):
+                step_func()
+        except Exception as e:
+            print(f"[VideoLingo] 步骤失败: {step_name} -> {e}", flush=True)
+            st.error(f"❌ 步骤「{step_name}」执行失败，错误信息：\n{e}\n\n修复后可直接再次点击「Start Processing Subtitles」，已完成的步骤会自动跳过。")
+            st.exception(e)
+            return False
+        print(f"[VideoLingo] 步骤完成: {step_name}", flush=True)
+        return True
+
+    def _summarize_and_translate():
         _4_1_summarize.get_summary()
         if load_key("pause_before_translate"):
             input(t("⚠️ PAUSE_BEFORE_TRANSLATE. Go to `output/log/terminology.json` to edit terminology. Then press ENTER to continue..."))
         _4_2_translate.translate_all()
-    with st.spinner(t("Processing and aligning subtitles...")): 
-        _5_split_sub.split_for_sub_main()
-        _6_gen_sub.align_timestamp_main()
-    with st.spinner(t("Merging subtitles to video...")):
-        _7_sub_into_vid.merge_subtitles_to_video()
-    
+
+    if not _run(t("Using Whisper for transcription..."), _2_asr.transcribe):
+        return False
+    if not _run(t("Splitting long sentences..."), lambda: (_3_1_split_nlp.split_by_spacy(), _3_2_split_meaning.split_sentences_by_meaning())):
+        return False
+    if not _run(t("Summarizing and translating..."), _summarize_and_translate):
+        return False
+    if not _run(t("Processing and aligning subtitles..."), lambda: (_5_split_sub.split_for_sub_main(), _6_gen_sub.align_timestamp_main())):
+        return False
+    if not _run(t("Merging subtitles to video..."), _7_sub_into_vid.merge_subtitles_to_video):
+        return False
+
     st.success(t("Subtitle processing complete! 🎉"))
     st.balloons()
+    return True
 
 def audio_processing_section():
     st.header(t("c. Dubbing"))

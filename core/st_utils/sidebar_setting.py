@@ -82,7 +82,18 @@ def page_setting():
             config_input(t("WhisperX 302ai API"), "whisper.whisperX_302_api_key")
         if runtime == "elevenlabs":
             config_input(("ElevenLabs API"), "whisper.elevenlabs_api_key")
-            
+
+        if runtime == "local":
+            # 说话人分离（Pyannote 本地模型，结果写入 speaker_id）
+            diarize = st.checkbox("说话人分离", value=bool(load_key("whisper.diarize")), help="使用本地 Pyannote 模型进行说话人分离，结果写入 speaker_id 列")
+            if diarize != load_key("whisper.diarize"):
+                update_key("whisper.diarize", diarize)
+                st.rerun()
+            if diarize:
+                num_speakers = st.number_input("期望说话人数 (0=自动)", min_value=0, max_value=50, step=1, value=int(load_key("whisper.num_speakers") or 0))
+                if num_speakers != load_key("whisper.num_speakers"):
+                    update_key("whisper.num_speakers", int(num_speakers))
+
          # --- 1. WhisperX 模型选择 ---
         model_options = ["large-v3", "large-v2", "medium", "small", "base", "tiny"]
         current_model = load_key("whisper.model_size") or "large-v3"

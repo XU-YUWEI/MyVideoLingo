@@ -35,8 +35,38 @@ def check_hf_mirror():
     rprint(f"[cyan]🚀 Selected mirror:[/cyan] {fastest_url} ({best_time:.2f}s)")
     return fastest_url
 
+def assign_speakers_to_result(result, speaker_segments):
+    """按时间重叠为每个 word / segment 分配 speaker_id（speaker_segments: [[start, end, speaker], ...]）"""
+    if not speaker_segments:
+        return result
+
+    def get_speaker(start, end):
+        best, best_overlap = None, 0.0
+        for s_start, s_end, spk in speaker_segments:
+            overlap = min(end, s_end) - max(start, s_start)
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best = spk
+        return best if best_overlap > 0 else None
+
+    for segment in result['segments']:
+        word_speakers = []
+        for word in segment.get('words', []):
+            if 'start' in word and 'end' in word:
+                spk = get_speaker(word['start'], word['end'])
+                word['speaker'] = spk
+                if spk:
+                    word_speakers.append(spk)
+        if word_speakers:
+            # 段内大多数 word 的说话人作为该段 speaker_id（与 whisperx.assign_word_speakers 思路一致）
+            segment['speaker_id'] = max(set(word_speakers), key=word_speakers.count)
+        else:
+            segment['speaker_id'] = get_speaker(segment['start'], segment['end'])
+    return result
+
+
 @except_handler("WhisperX processing error:")
-def transcribe_audio(raw_audio_file, vocal_audio_file, start, end):
+def transcribe_audio(raw_audio_file, vocal_audio_file, start, end, speaker_segments=None):
     os.environ['HF_ENDPOINT'] = check_hf_mirror()
     WHISPER_LANGUAGE = load_key("whisper.language")
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -133,4 +163,7 @@ def transcribe_audio(raw_audio_file, vocal_audio_file, start, end):
                 word['start'] += start
             if 'end' in word:
                 word['end'] += start
+
+    # 按时间重叠把说话人标记到 word / segment（须在时间偏移调整之后）
+    result = assign_speakers_to_result(result, speaker_segments)
     return result

@@ -1,3 +1,4 @@
+import os
 from core.utils import *
 from core.asr_backend.demucs_vl import demucs_audio
 from core.asr_backend.audio_preprocess import process_transcription, convert_video_to_audio, split_audio, save_results, normalize_audio_volume
@@ -19,10 +20,18 @@ def transcribe():
 
     # 3. Extract audio
     segments = split_audio(_RAW_AUDIO_FILE)
-    
+
+    # 3.5 整段音频说话人分离（仅 local runtime 且开启 diarize 时，全局说话人 ID 一致）
+    runtime = load_key("whisper.runtime")
+    speaker_segments = None
+    if runtime == "local" and load_key("whisper.diarize"):
+        from core.asr_backend.pyannote_diarize import diarize_audio
+        # demucs 开启时用分离出的干净人声轨，否则用原始音轨
+        pyannote_model = os.path.join(load_key("model_dir"), "speaker-diarization-community-1")
+        speaker_segments = diarize_audio(vocal_audio, pyannote_model, num_speakers=load_key("whisper.num_speakers") or 0)
+
     # 4. Transcribe audio by clips
     all_results = []
-    runtime = load_key("whisper.runtime")
     if runtime == "local":
         from core.asr_backend.whisperX_local import transcribe_audio as ts
         rprint("[cyan]🎤 Transcribing audio with local model...[/cyan]")
@@ -34,7 +43,10 @@ def transcribe():
         rprint("[cyan]🎤 Transcribing audio with ElevenLabs API...[/cyan]")
 
     for start, end in segments:
-        result = ts(_RAW_AUDIO_FILE, vocal_audio, start, end)
+        if runtime == "local":
+            result = ts(_RAW_AUDIO_FILE, vocal_audio, start, end, speaker_segments=speaker_segments)
+        else:
+            result = ts(_RAW_AUDIO_FILE, vocal_audio, start, end)
         all_results.append(result)
     
     # 5. Combine results

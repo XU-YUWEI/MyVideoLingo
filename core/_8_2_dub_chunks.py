@@ -153,6 +153,8 @@ def gen_dub_chunks():
         if len(lines) >= 3:
             text = ' '.join(lines[2:])
             text = re.sub(r'\([^)]*\)|（[^）]*）', '', text).strip().replace('-', '')
+            # 剥离行首 [角色N] 标记，避免 TTS 读出
+            text = re.sub(r'^\[[^\]]*\]\s*', '', text)
             content_lines.append(text)
             
     # Process source subtitles (same structure)
@@ -161,6 +163,8 @@ def gen_dub_chunks():
         if len(lines) >= 3:
             text = ' '.join(lines[2:])
             text = re.sub(r'\([^)]*\)|（[^）]*）', '', text).strip().replace('-', '')
+            # 剥离行首 [角色N] 标记，避免 TTS 读出
+            text = re.sub(r'^\[[^\]]*\]\s*', '', text)
             ori_content_lines.append(text)
 
     # Match processing — 跳过文本匹配，按顺序分配

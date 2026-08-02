@@ -16,12 +16,7 @@ Split the given subtitle text into **{num_parts}** parts, each less than **{word
 2. MOST IMPORTANT: Keep parts roughly equal in length (minimum 3 words each)
 3. Split at natural points like punctuation marks or conjunctions
 4. If provided text is repeated words, simply split at the middle of the repeated words.
-
-## Steps
-1. Analyze the sentence structure, complexity, and key splitting challenges
-2. Generate two alternative splitting approaches with [br] tags at split positions
-3. Compare both approaches highlighting their strengths and weaknesses
-4. Choose the best splitting approach
+5. Keep the original wording and order unchanged, only insert [br] at split positions
 
 ## Given Text
 <split_this_sentence>
@@ -31,11 +26,7 @@ Split the given subtitle text into **{num_parts}** parts, each less than **{word
 ## Output in only JSON format and no other text
 ```json
 {{
-    "analysis": "Brief description of sentence structure, complexity, and key splitting challenges",
-    "split1": "First splitting approach with [br] tags at split positions",
-    "split2": "Alternative splitting approach with [br] tags at split positions",
-    "assess": "Comparison of both approaches highlighting their strengths and weaknesses",
-    "choice": "1 or 2"
+    "split": "The split sentence with [br] tags at split positions"
 }}
 ```
 
@@ -250,6 +241,58 @@ Please use a two-step thinking process to handle the text line by line:
 Note: Start you answer with ```json and end with ```, do not add any other text.
 '''
     return prompt_expressiveness.strip()
+
+
+def get_prompt_natural(lines, shared_prompt):
+    """单遍自然翻译：忠实直译 + 自然润色一次完成（reflect_translate=False 时使用，节省 token）"""
+    TARGET_LANGUAGE = load_key("target_language")
+    src_language = load_key("whisper.detected_language")
+    line_splits = lines.split('\n')
+
+    json_dict = {}
+    for i, line in enumerate(line_splits, 1):
+        json_dict[f"{i}"] = {"origin": line, "free": f"natural {TARGET_LANGUAGE} translation {i}."}
+    json_format = json.dumps(json_dict, indent=2, ensure_ascii=False)
+
+    prompt_natural = f'''
+## Role
+You are a professional Netflix subtitle translator, fluent in both {src_language} and {TARGET_LANGUAGE}, as well as their respective cultures.
+Your expertise lies in accurately understanding the semantics and structure of the original {src_language} text and translating it into natural, fluent {TARGET_LANGUAGE} in one pass.
+
+## Task
+We have a segment of original {src_language} subtitles that need to be translated into {TARGET_LANGUAGE}. These subtitles come from a specific context and may contain specific themes and terminology.
+
+1. Translate the original {src_language} subtitles into {TARGET_LANGUAGE} line by line
+2. Faithfully convey the original meaning AND express it in natural, idiomatic {TARGET_LANGUAGE} (avoid word-for-word literal translation)
+3. Consider the context and professional terminology
+4. Do not add comments or explanations in the translation, as the subtitles are for the audience to read
+
+## CRITICAL DUBBING CONSTRAINTS
+1. **BREVITY IS KING**: Subtitles must be read aloud. If the translation is too long, the voice actor (TTS) will sound rushed. 
+2. **STRICT LENGTH CONTROL**: Aim for the {TARGET_LANGUAGE} translation to be as short as possible without losing the core meaning. 
+3. **OMIT FILLERS**: Remove redundant adjectives, formal connectors, and polite particles that don't add semantic value.
+
+{shared_prompt}
+
+<translation_principles>
+1. Faithful to the original: Accurately convey the content and meaning of the original text, without arbitrarily changing, adding, or omitting content.
+2. Natural expression: Adjust word order and phrasing to match natural {TARGET_LANGUAGE} expression habits, and choose wording appropriate to the context and theme.
+3. Accurate terminology: Use professional terms correctly and maintain consistency in terminology.
+</translation_principles>
+
+## INPUT
+<subtitles>
+{lines}
+</subtitles>
+
+## Output in only JSON format and no other text
+```json
+{json_format}
+```
+
+Note: Start you answer with ```json and end with ```, do not add any other text.
+'''
+    return prompt_natural.strip()
 
 
 ## ================================================================

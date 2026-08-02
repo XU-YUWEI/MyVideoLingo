@@ -93,6 +93,7 @@ def split_align_subs(src_lines: List[str], tr_lines: List[str]):
     
     return src_lines, tr_lines, remerged_tr_lines
 
+@check_file_exists(_5_SPLIT_SUB)
 def split_for_sub_main():
     console.print("[bold green]🚀 Start splitting subtitles...[/bold green]")
     

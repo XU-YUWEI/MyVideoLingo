@@ -56,6 +56,33 @@ def show_difference(str1, str2):
     print("Position markers: " + "".join("^" if i in diff_positions else " " for i in range(max(len(str1), len(str2)))))
     print(f"Difference indices: {diff_positions}")
 
+def build_speaker_mapping(df_text):
+    """收集 df_text 中所有说话人标签，按序映射为 角色1/角色2/...（SPEAKER_00 → 角色1）"""
+    if 'speaker_id' not in df_text.columns:
+        return {}, []
+    labels = sorted(df_text['speaker_id'].dropna().astype(str).unique())
+    return {lab: f"角色{i + 1}" for i, lab in enumerate(labels)}, labels
+
+
+def get_sentence_speaker(df_text, start, end):
+    """统计 [start, end] 区间内 word 的重叠时长，取重叠最长的说话人标签；无则返回 None"""
+    if 'speaker_id' not in df_text.columns:
+        return None
+    mask = (df_text['end'] > start) & (df_text['start'] < end)
+    seg = df_text.loc[mask, ['start', 'end', 'speaker_id']].dropna(subset=['speaker_id'])
+    if seg.empty:
+        return None
+    overlap = {}
+    for _, r in seg.iterrows():
+        ov = min(end, r['end']) - max(start, r['start'])
+        if ov > 0:
+            lab = str(r['speaker_id'])
+            overlap[lab] = overlap.get(lab, 0.0) + ov
+    if not overlap:
+        return None
+    return max(overlap, key=overlap.get)
+
+
 def get_sentence_timestamps(df_words, df_sentences):
     time_stamp_list = []
     
@@ -114,6 +141,12 @@ def align_timestamp(df_text, df_translate, subtitle_output_configs: list, output
     df_trans_time['timestamp'] = time_stamp_list
     df_trans_time['duration'] = df_trans_time['timestamp'].apply(lambda x: x[1] - x[0])
 
+    # 按时间范围统计每句的说话人 → 角色N（没有说话人不加前缀）
+    speaker_map, _ = build_speaker_mapping(df_text)
+    df_trans_time['speaker'] = [
+        speaker_map.get(get_sentence_speaker(df_text, s, e)) for s, e in time_stamp_list
+    ]
+
     # Remove gaps 🕳️
     for i in range(len(df_trans_time)-1):
         delta_time = df_trans_time.loc[i+1, 'timestamp'][0] - df_trans_time.loc[i, 'timestamp'][1]
@@ -129,7 +162,13 @@ def align_timestamp(df_text, df_translate, subtitle_output_configs: list, output
 
     # Output subtitles 📜
     def generate_subtitle_string(df, columns):
-        return ''.join([f"{i+1}\n{row['timestamp']}\n{row[columns[0]].strip()}\n{row[columns[1]].strip() if len(columns) > 1 else ''}\n\n" for i, row in df.iterrows()]).strip()
+        def _fmt(row, col):
+            text = str(row[col]).strip()
+            spk = row.get('speaker')
+            if spk and text:
+                text = f"[{spk}] {text}"
+            return text
+        return ''.join([f"{i+1}\n{row['timestamp']}\n{_fmt(row, columns[0])}\n{_fmt(row, columns[1]) if len(columns) > 1 else ''}\n\n" for i, row in df.iterrows()]).strip()
 
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)

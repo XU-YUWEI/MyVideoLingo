@@ -3,8 +3,8 @@ setlocal
 :: 获取当前文件夹路径
 set ROOT=%~dp0
 set BIN_PATH=%ROOT%bin
-:: 指向你的 WinPython 路径
-set PY_PATH=%ROOT%WPy64-31001\python-3.10.0.amd64
+:: 指向你的 Python 环境路径（conda: videoLingo20260312）
+set PY_PATH=D:\Users\xuyuwei\miniconda3\envs\videoLingo20260312
 set VL_PATH=%ROOT%VideoLingo
 
 :: 注入环境变量，让系统优先找 bin 里的 ffmpeg
