@@ -117,7 +117,10 @@ def handle_fish_speech(text, save_path, ref_choice=None):
     result = client.predict(
         text=text,
         normalize=True,
-        reference_id="videolingo_user",
+        # 注意：reference_id 必须为空。服务端逻辑是 reference_id 非空时
+        # 会忽略 reference_audio/reference_text，改用 references/<id>/ 下的音色，
+        # 导致"固定参考音频"失效。
+        reference_id="",
         reference_audio=handle_file(ref_path),
         reference_text=ref_text,
         max_new_tokens=0,

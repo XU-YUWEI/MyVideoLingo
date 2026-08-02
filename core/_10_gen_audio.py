@@ -214,6 +214,20 @@ def gen_audio() -> None:
     os.makedirs(_AUDIO_TMP_DIR, exist_ok=True)
     os.makedirs(_AUDIO_SEGS_DIR, exist_ok=True)
     
+    # 🧹 清理上次的配音产物：tts_main 有"文件已存在就跳过"的逻辑，
+    # 若残留旧代码/旧参考生成的 tmp 文件，会导致本次配音复用过期音频。
+    removed = 0
+    for _dir in (_AUDIO_TMP_DIR, _AUDIO_SEGS_DIR):
+        for _f in os.listdir(_dir):
+            _fp = os.path.join(_dir, _f)
+            if os.path.isfile(_fp):
+                try:
+                    os.remove(_fp)
+                    removed += 1
+                except Exception as e:
+                    rprint(f"[yellow]⚠️ 清理失败: {_fp} ({e})[/yellow]")
+    rprint(f"[blue]🧹 已清理 {removed} 个旧的配音音频文件[/blue]")
+    
     # 📝 Step2: Load task file
     tasks_df = pd.read_excel(_8_1_AUDIO_TASK)
     rprint("[green]📊 Loaded task file successfully[/green]")

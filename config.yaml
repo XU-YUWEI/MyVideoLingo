@@ -76,7 +76,7 @@ pause_before_translate: false
 
 ## ======================== Dubbing Settings ======================== ##
 # TTS selection [sf_fish_tts, openai_tts, gpt_sovits, azure_tts, fish_tts, edge_tts, custom_tts]
-tts_method: 'IndexTTS2'
+tts_method: 'Fish-Speech'
 
 # SiliconFlow FishTTS
 sf_fish_tts:
@@ -133,9 +133,9 @@ index_tts:
 fish_speech:
   url: 'http://127.0.0.1:7860/'
   # 1: 原角色参考, 2: 固定参考
-  ref_mode: 1
+  ref_mode: 2
   # 当 ref_mode 为 2 时建议填写，增加一致性
-  ref_text: '你在干嘛呀，你在打酱油吗'
+  ref_text: '我们不对模型的任何滥用负责，请在使用之前考虑您当地的法律法规'
 f5tts:
   302_api: 'YOUR_302_API_KEY'
 
