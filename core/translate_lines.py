@@ -1,3 +1,4 @@
+import re
 from core.prompts import generate_shared_prompt, get_prompt_faithfulness, get_prompt_expressiveness, get_prompt_natural
 from rich.panel import Panel
 from rich.console import Console
@@ -5,6 +6,11 @@ from rich.table import Table
 from rich import box
 from core.utils import *
 console = Console()
+
+
+def _norm_text(s: str) -> str:
+    """归一化：去所有非字母数字字符并小写，用于宽松比对模型回显的原文"""
+    return re.sub(r'[\W_]+', '', str(s).lower())
 
 def valid_translate_result(result: dict, required_keys: list, required_sub_keys: list):
     # Check for the required key
@@ -31,14 +37,26 @@ def translate_lines(lines, previous_content_prompt, after_cotent_prompt, things_
 
     # Retry translation if the length of the original text and the translated text are not the same, or if the specified key is missing
     def retry_translation(prompt, length, step_name, required_sub_key):
+        src_lines = lines.split('\n')
         def valid_def(response_data):
             required_keys = [str(i) for i in range(1, length+1)]
             # 精简模式只要求数字键齐全，不回显原文
             required_sub_keys = [] if compact else [required_sub_key]
             return valid_translate_result(response_data, required_keys, required_sub_keys)
+        def origin_aligned(response_data):
+            """非紧凑模式：逐行校验模型回显的 origin 与输入行归一化一致。
+            防止模型合并/遗漏行导致"行数恰好相等但内容错位"（纯行数校验无法发现）。"""
+            if compact:
+                return True
+            for i in range(1, length + 1):
+                item = response_data.get(str(i))
+                origin = item.get('origin', '') if isinstance(item, dict) else ''
+                if _norm_text(origin) != _norm_text(src_lines[i - 1]):
+                    return False
+            return True
         for retry in range(3):
             result = ask_gpt(prompt+retry* " ", resp_type='json', valid_def=valid_def, log_title=f'translate_{step_name}')
-            if len(lines.split('\n')) == len(result):
+            if len(src_lines) == len(result) and origin_aligned(result):
                 return result
             if retry != 2:
                 console.print(f'[yellow]⚠️ {step_name.capitalize()} translation of block {index} failed, Retry...[/yellow]')

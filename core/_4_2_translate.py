@@ -8,7 +8,6 @@ from core._6_gen_sub import align_timestamp
 from core.utils import *
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from difflib import SequenceMatcher
 from core.utils.models import *
 console = Console()
 
@@ -53,10 +52,6 @@ def translate_chunk(chunk, chunks, theme_prompt, i):
     translation, english_result = translate_lines(chunk, previous_content_prompt, after_content_prompt, things_to_note_prompt, theme_prompt, i)
     return i, english_result, translation
 
-# Add similarity calculation function
-def similar(a, b):
-    return SequenceMatcher(None, a, b).ratio()
-
 # 🚀 Main function to translate all chunks
 @check_file_exists(_4_2_TRANSLATION)
 def translate_all():
@@ -85,21 +80,19 @@ def translate_all():
     for i, chunk in enumerate(chunks):
         chunk_lines = chunk.split('\n')
         src_text.extend(chunk_lines)
-        
-        # Calculate similarity between current chunk and translation results
-        chunk_text = ''.join(chunk_lines).lower()
-        matching_results = [(r, similar(''.join(r[1].split('\n')).lower(), chunk_text)) 
-                          for r in results]
-        best_match = max(matching_results, key=lambda x: x[1])
-        
-        # Check similarity and handle exceptions
-        if best_match[1] < 0.9:
-            console.print(f"[yellow]Warning: No matching translation found for chunk {i}[/yellow]")
-            raise ValueError(f"Translation matching failed (chunk {i})")
-        elif best_match[1] < 1.0:
-            console.print(f"[yellow]Warning: Similar match found (chunk {i}, similarity: {best_match[1]:.3f})[/yellow]")
-            
-        trans_text.extend(best_match[0][2].split('\n'))
+
+        # 直接用 chunk 索引对应翻译结果（results 已按索引排序），
+        # 避免重复/相似台词被模糊相似度匹配到错误 chunk 导致译文错位
+        if i >= len(results):
+            raise ValueError(f"No translation result for chunk {i}")
+        _i, _english, translation = results[i]
+        trans_lines = translation.split('\n')
+        if len(trans_lines) != len(chunk_lines):
+            raise ValueError(
+                f"Chunk {i} translation line count mismatch: "
+                f"expected {len(chunk_lines)}, got {len(trans_lines)}. "
+                f"Please check `output/gpt_log/`.")
+        trans_text.extend(trans_lines)
     
     # Trim long translation text
     df_text = pd.read_excel(_2_CLEANED_CHUNKS)

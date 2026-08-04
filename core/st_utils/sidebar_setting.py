@@ -2,6 +2,7 @@ import streamlit as st
 from translations.translations import translate as t
 from translations.translations import DISPLAY_LANGUAGES
 from core.utils import *
+from core.tts_backend.qwen3_tts import list_personas
 import matplotlib.font_manager as fm
 
 @st.cache_data
@@ -254,7 +255,7 @@ def page_setting():
             update_key("burn_subtitles", burn_subtitles)
             st.rerun()
     with st.expander(t("Dubbing Settings"), expanded=True):
-        tts_methods = ["azure_tts", "openai_tts", "fish_tts", "sf_fish_tts", "edge_tts", "gpt_sovits", "custom_tts", "sf_cosyvoice2", "f5tts","IndexTTS2", "Fish-Speech"]
+        tts_methods = ["azure_tts", "openai_tts", "fish_tts", "sf_fish_tts", "edge_tts", "gpt_sovits", "custom_tts", "sf_cosyvoice2", "f5tts","IndexTTS2", "Fish-Speech", "Qwen3TTS"]
         select_tts = st.selectbox(t("TTS Method"), options=tts_methods, index=tts_methods.index(load_key("tts_method")))
         if select_tts != load_key("tts_method"):
             update_key("tts_method", select_tts)
@@ -311,7 +312,53 @@ def page_setting():
                 
                 # Fish-Speech 建议配上参考文本
                 config_input("参考音频对应的文本", "fish_speech.ref_text")
-                
+
+        # --- 新增 Qwen3TTS 的配置逻辑 ---
+        elif select_tts == "Qwen3TTS":
+            config_input("API URL", "qwen3_tts.url", help="Default: https://127.0.0.1:7869/ (Qwen3TTS_Pro WebUI)")
+            
+            qwen_ref_modes = {1: "使用原角色音频参考", 2: "使用固定参考音频", 3: "使用固化音色"}
+            current_mode = int(load_key("qwen3_tts.ref_mode") or 1)
+            selected_mode = st.selectbox("音色来源",
+                                        options=list(qwen_ref_modes.keys()),
+                                        format_func=lambda x: qwen_ref_modes[x],
+                                        index=list(qwen_ref_modes.keys()).index(current_mode) if current_mode in qwen_ref_modes else 0)
+            if selected_mode != current_mode:
+                update_key("qwen3_tts.ref_mode", selected_mode)
+                st.rerun()
+
+            if selected_mode == 2:
+                uploaded_file = st.file_uploader("上传固定参考音频", type=["wav", "mp3"], key="qwen_upload")
+                if uploaded_file is not None:
+                    save_path = "output/qwen3_fixed_ref.wav"
+                    with open(save_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    st.success(f"已上传: {uploaded_file.name}")
+            elif selected_mode == 3:
+                config_input("固化音色目录 (personas)", "qwen3_tts.persona_dir",
+                             help="Qwen3TTS_Pro/personas 目录，存放固化音色 {名称}.wav")
+                persona_names = list_personas(load_key("qwen3_tts.persona_dir"))
+                current_persona = load_key("qwen3_tts.persona_name") or ""
+                if persona_names:
+                    index = persona_names.index(current_persona) if current_persona in persona_names else 0
+                    selected_persona = st.selectbox("选择固化音色", options=persona_names, index=index)
+                    if selected_persona != current_persona:
+                        update_key("qwen3_tts.persona_name", selected_persona)
+                else:
+                    st.warning("未找到固化音色，请检查 personas 目录路径")
+
+            size_options = ["0.6B", "1.7B"]
+            current_size = load_key("qwen3_tts.size") or "0.6B"
+            if current_size not in size_options:
+                current_size = "0.6B"
+            selected_size = st.radio("模型规格", options=size_options, index=size_options.index(current_size), horizontal=True)
+            if selected_size != current_size:
+                update_key("qwen3_tts.size", selected_size)
+                st.rerun()
+
+            config_input("情感指令（可选）", "qwen3_tts.instruct",
+                         help="作用于整段视频，如: 带点哭腔、用温柔的语气。需服务端 fn_voice_clone 支持 instruct 参数")
+
         # sub settings for each tts method
         elif select_tts == "sf_fish_tts":
             config_input(t("SiliconFlow API Key"), "sf_fish_tts.api_key")

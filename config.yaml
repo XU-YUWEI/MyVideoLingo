@@ -104,7 +104,7 @@ pause_before_translate: false
 
 ## ======================== Dubbing Settings ======================== ##
 # TTS selection [sf_fish_tts, openai_tts, gpt_sovits, azure_tts, fish_tts, edge_tts, custom_tts]
-tts_method: 'Fish-Speech'
+tts_method: 'Qwen3TTS'
 
 # SiliconFlow FishTTS
 sf_fish_tts:
@@ -164,6 +164,20 @@ fish_speech:
   ref_mode: 2
   # 当 ref_mode 为 2 时建议填写，增加一致性
   ref_text: '我们不对模型的任何滥用负责，请在使用之前考虑您当地的法律法规'
+# Qwen3TTS 本地服务配置（Qwen3TTS_Pro WebUI，https://127.0.0.1:7869）
+qwen3_tts:
+  url: 'https://127.0.0.1:7869/'
+  # 音色来源: 1 原角色动态参考, 2 固定参考音频, 3 固化音色(读 personas 目录)
+  ref_mode: 3
+  # 固定音频参考的音频库目录（ref_mode 为 2 时，逐行配音页可上传多个音频到此处）
+  refs_dir: 'output/qwen_refs'
+  # 固化音色目录（Qwen3TTS_Pro/personas），ref_mode 为 3 时使用
+  persona_dir: 'D:\videosoftware\20260323\qwen3tts\Qwen3TTS_Pro\personas'
+  persona_name: '克隆一'
+  # 模型规格: '1.7B' 高保真 / '0.6B' 极速
+  size: '0.6B'
+  # 情感指令（可选），服务端 fn_voice_clone 支持时生效，如: 带点哭腔、用温柔的语气
+  instruct: ''
 f5tts:
   302_api: 'YOUR_302_API_KEY'
 

@@ -13,6 +13,7 @@ from core.tts_backend.sf_cosyvoice2 import cosyvoice_tts_for_videolingo
 from core.tts_backend.custom_tts import custom_tts
 from core.prompts import get_correct_text_prompt
 from core.tts_backend._302_f5tts import f5_tts_for_videolingo
+from core.tts_backend.qwen3_tts import qwen3_tts_for_videolingo
 from core.utils import *
 
 def clean_text_for_tts(text):
@@ -22,9 +23,12 @@ def clean_text_for_tts(text):
         text = text.replace(char, '')
     return text.strip()
 
-def tts_main(text, save_as, number, task_df, ref_choice=None):
+def tts_main(text, save_as, number, task_df, ref_choice=None, instruct=None, ref_file=None, persona_name=None):
     """
-    ref_choice: 可选 '1' 或 '2'，指定使用哪个用户上传的参考音频（仅 custom_tts 有效）
+    ref_choice: 可选 '1' 或 '2'，指定使用哪个用户上传的参考音频（仅 custom_tts / Qwen3TTS 有效）
+    instruct: 可选情感指令，逐行配音页按行传入（仅 Qwen3TTS 有效）
+    ref_file: Qwen3TTS 模式2 按行选定的固定音频文件名（refs_dir 内）
+    persona_name: Qwen3TTS 模式3 按行选定的固化音色名（personas 目录内）
     """
     text = clean_text_for_tts(text)
     # Check if text is empty or single character, single character voiceovers are prone to bugs
@@ -68,6 +72,8 @@ def tts_main(text, save_as, number, task_df, ref_choice=None):
                 cosyvoice_tts_for_videolingo(text, save_as, number, task_df)
             elif TTS_METHOD == 'f5tts':
                 f5_tts_for_videolingo(text, save_as, number, task_df)
+            elif TTS_METHOD == 'Qwen3TTS':
+                qwen3_tts_for_videolingo(text, save_as, number, task_df, ref_choice=ref_choice, instruct=instruct, ref_file=ref_file, persona_name=persona_name)
                 
             # Check generated audio duration
             duration = get_audio_duration(save_as)

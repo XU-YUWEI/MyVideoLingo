@@ -266,7 +266,12 @@ def get_prompt_natural(lines, shared_prompt):
         for i, line in enumerate(line_splits, 1):
             json_dict[f"{i}"] = {"origin": line, "free": f"natural {TARGET_LANGUAGE} translation {i}."}
         json_format = json.dumps(json_dict, indent=2, ensure_ascii=False)
-        count_note = "Note: Start you answer with ```json and end with ```, do not add any other text."
+        count_note = (
+            f'The output JSON must have exactly {n} keys ("1" to "{n}"), one per input line, in order.\n'
+            f'For each key, "origin" must be copied VERBATIM from the corresponding input line '
+            f'(do NOT translate, merge, omit, split or rephrase it); "free" is its {TARGET_LANGUAGE} translation.\n'
+            f'Note: Start you answer with ```json and end with ```, do not add any other text.'
+        )
 
     prompt_natural = f'''
 ## Role
