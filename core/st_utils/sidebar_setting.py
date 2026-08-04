@@ -25,6 +25,43 @@ def config_input(label, key, help=None):
         update_key(key, val)
     return val
 
+def _is_ollama_url(base_url):
+    return "11434" in base_url or "ollama" in base_url.lower()
+
+@st.cache_data(ttl=30)
+def ollama_running() -> bool:
+    import urllib.request
+    try:
+        urllib.request.urlopen("http://localhost:11434/api/tags", timeout=2)
+        return True
+    except Exception:
+        return False
+
+@st.cache_data(ttl=30)
+def installed_qwen_models() -> list:
+    import subprocess
+    try:
+        out = subprocess.run([r"D:\Ollama\ollama.exe", "list"], capture_output=True,
+                             text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+        models = []
+        for line in out.stdout.splitlines()[1:]:
+            parts = line.split()
+            if parts:
+                name = parts[0].split(':')[0]
+                if name.startswith("qwen3-") and name not in models:
+                    models.append(name)
+        return models
+    except Exception:
+        return []
+
+def start_ollama_service():
+    import subprocess
+    try:
+        subprocess.Popen([r"D:\Ollama\ollama.exe", "serve"], cwd=r"D:\Ollama",
+                         creationflags=subprocess.CREATE_NO_WINDOW)
+    except Exception as e:
+        st.error(str(e))
+
 def page_setting():
 
     display_language = st.selectbox("Display Language 🌐", 
@@ -51,6 +88,55 @@ def page_setting():
         llm_support_json = st.toggle(t("LLM JSON Format Support"), value=load_key("api.llm_support_json"), help=t("Enable if your LLM supports JSON mode output"))
         if llm_support_json != load_key("api.llm_support_json"):
             update_key("api.llm_support_json", llm_support_json)
+            st.rerun()
+
+        ollama_native = st.toggle(t("Ollama Native API (Disable Thinking)"), value=load_key("api.use_ollama_native"),
+                                  help=t("When using Ollama locally, call the native /api/chat endpoint with thinking disabled, speeding up qwen3 translation about 10x"))
+        if ollama_native != load_key("api.use_ollama_native"):
+            update_key("api.use_ollama_native", ollama_native)
+            st.rerun()
+
+        # --- 本地 Ollama：服务状态/启动按钮 + 模型切换（仅 base_url 指向 Ollama 时显示）---
+        if _is_ollama_url(load_key("api.base_url")):
+            st.divider()
+            st.markdown(f"**{t('Ollama Service')}**")
+            _running = ollama_running()
+            if _running:
+                st.success(t("Ollama Running"))
+            else:
+                st.warning(t("Ollama Not Running"))
+            if st.button(t("Start Ollama Service"), key="start_ollama", disabled=_running):
+                start_ollama_service()
+                st.toast(t("Ollama Starting..."))
+                st.rerun()
+            installed = installed_qwen_models()
+            if installed:
+                current_model = load_key("api.model")
+                index = installed.index(current_model) if current_model in installed else 0
+                sel_model = st.selectbox(t("Local Model"), options=installed, index=index,
+                                         help=t("Switch local model. Only installed models are listed."))
+                if sel_model != current_model:
+                    update_key("api.model", sel_model)
+                    st.rerun()
+            else:
+                st.caption(t("No local qwen model installed"))
+    with st.expander(t("Translation Settings"), expanded=True):
+        one_shot = st.toggle(t("One-shot Translation"), value=load_key("translate_one_shot"),
+                             help=t("When enabled and the whole subtitle text is short enough (translate_one_shot_max_chars), all lines are translated in a single LLM call to save tokens"))
+        if one_shot != load_key("translate_one_shot"):
+            update_key("translate_one_shot", one_shot)
+            st.rerun()
+
+        compact = st.toggle(t("Compact Translation Output"), value=load_key("compact_translate_output"),
+                            help=t("When enabled, translation responses do not echo the original text, cutting output tokens by about one third"))
+        if compact != load_key("compact_translate_output"):
+            update_key("compact_translate_output", compact)
+            st.rerun()
+
+        heuristic = st.toggle(t("Heuristic-First Sentence Split"), value=load_key("split_meaning_heuristic_first"),
+                              help=t("When enabled, long sentences are split locally at punctuation/conjunctions first, falling back to LLM only when the heuristic fails"))
+        if heuristic != load_key("split_meaning_heuristic_first"):
+            update_key("split_meaning_heuristic_first", heuristic)
             st.rerun()
     with st.expander(t("Subtitles Settings"), expanded=True):
         c1, c2 = st.columns(2)

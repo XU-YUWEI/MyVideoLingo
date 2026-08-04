@@ -244,15 +244,29 @@ Note: Start you answer with ```json and end with ```, do not add any other text.
 
 
 def get_prompt_natural(lines, shared_prompt):
-    """单遍自然翻译：忠实直译 + 自然润色一次完成（reflect_translate=False 时使用，节省 token）"""
+    """单遍自然翻译：忠实直译 + 自然润色一次完成（reflect_translate=False 时使用，节省 token）
+    compact_translate_output=True 时，译文 JSON 不回显原文（origin），输出 token 进一步减少约 1/3"""
     TARGET_LANGUAGE = load_key("target_language")
     src_language = load_key("whisper.detected_language")
+    compact = load_key("compact_translate_output")
     line_splits = lines.split('\n')
+    n = len(line_splits)
 
-    json_dict = {}
-    for i, line in enumerate(line_splits, 1):
-        json_dict[f"{i}"] = {"origin": line, "free": f"natural {TARGET_LANGUAGE} translation {i}."}
-    json_format = json.dumps(json_dict, indent=2, ensure_ascii=False)
+    if compact:
+        json_dict = {}
+        for i in range(1, n + 1):
+            json_dict[f"{i}"] = f"natural {TARGET_LANGUAGE} translation {i}."
+        json_format = json.dumps(json_dict, indent=2, ensure_ascii=False)
+        count_note = (
+            f'The output JSON must have exactly {n} keys ("1" to "{n}"), one per input line, in order.\n'
+            f'Each value is ONLY the {TARGET_LANGUAGE} translation of the corresponding line. Do NOT repeat the original {src_language} text.'
+        )
+    else:
+        json_dict = {}
+        for i, line in enumerate(line_splits, 1):
+            json_dict[f"{i}"] = {"origin": line, "free": f"natural {TARGET_LANGUAGE} translation {i}."}
+        json_format = json.dumps(json_dict, indent=2, ensure_ascii=False)
+        count_note = "Note: Start you answer with ```json and end with ```, do not add any other text."
 
     prompt_natural = f'''
 ## Role
@@ -289,7 +303,7 @@ We have a segment of original {src_language} subtitles that need to be translate
 ```json
 {json_format}
 ```
-
+{count_note}
 Note: Start you answer with ```json and end with ```, do not add any other text.
 '''
     return prompt_natural.strip()

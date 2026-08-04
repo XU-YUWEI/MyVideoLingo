@@ -21,11 +21,21 @@ def valid_translate_result(result: dict, required_keys: list, required_sub_keys:
 def translate_lines(lines, previous_content_prompt, after_cotent_prompt, things_to_note_prompt, summary_prompt, index = 0):
     shared_prompt = generate_shared_prompt(previous_content_prompt, after_cotent_prompt, summary_prompt, things_to_note_prompt)
     line_count = len(lines.split('\n'))
+    compact = load_key("compact_translate_output")
+
+    # 兼容精简模式（值=译文字符串）与完整模式（值={"origin","free"} 字典）
+    def get_origin(item, i):
+        return item['origin'] if isinstance(item, dict) else lines.split('\n')[i - 1]
+    def get_free(item):
+        return item['free'] if isinstance(item, dict) else item
 
     # Retry translation if the length of the original text and the translated text are not the same, or if the specified key is missing
     def retry_translation(prompt, length, step_name, required_sub_key):
         def valid_def(response_data):
-            return valid_translate_result(response_data, [str(i) for i in range(1, length+1)], [required_sub_key])
+            required_keys = [str(i) for i in range(1, length+1)]
+            # 精简模式只要求数字键齐全，不回显原文
+            required_sub_keys = [] if compact else [required_sub_key]
+            return valid_translate_result(response_data, required_keys, required_sub_keys)
         for retry in range(3):
             result = ask_gpt(prompt+retry* " ", resp_type='json', valid_def=valid_def, log_title=f'translate_{step_name}')
             if len(lines.split('\n')) == len(result):
@@ -42,14 +52,14 @@ def translate_lines(lines, previous_content_prompt, after_cotent_prompt, things_
         table = Table(title="Translation Results", show_header=False, box=box.ROUNDED)
         table.add_column("Translations", style="bold")
         for i, key in enumerate(natural_result):
-            table.add_row(f"[cyan]Origin:  {natural_result[key]['origin']}[/cyan]")
-            table.add_row(f"[magenta]Natural: {natural_result[key]['free']}[/magenta]")
+            table.add_row(f"[cyan]Origin:  {get_origin(natural_result[key], i + 1)}[/cyan]")
+            table.add_row(f"[magenta]Natural: {get_free(natural_result[key])}[/magenta]")
             if i < len(natural_result) - 1:
                 table.add_row("[yellow]" + "-" * 50 + "[/yellow]")
 
         console.print(table)
 
-        translate_result = "\n".join([natural_result[i]["free"].replace('\n', ' ').strip() for i in natural_result])
+        translate_result = "\n".join([get_free(natural_result[i]).replace('\n', ' ').strip() for i in natural_result])
 
         if line_count != len(translate_result.split('\n')):
             console.print(Panel(f'[red]❌ Translation of block {index} failed, Length Mismatch, Please check `output/gpt_log/translate_natural.json`[/red]'))

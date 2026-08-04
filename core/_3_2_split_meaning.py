@@ -13,6 +13,49 @@ def tokenize_sentence(sentence, nlp):
     doc = nlp(sentence)
     return [token.text for token in doc]
 
+# 本地启发式分句用到的连接词
+_CONJUNCTION_WORDS = {
+    'and', 'or', 'but', 'so', 'because', 'while', 'when', 'if', 'that', 'which',
+    'who', 'where', 'then', 'yet', 'though', 'although', 'since', 'until',
+    'before', 'after', 'with', 'without'
+}
+
+def heuristic_split_sentence(sentence, num_parts, word_limit):
+    """本地启发式分句：在标点/连接词附近切分，保证每段 ≤ word_limit 词。
+    切分失败（无法满足要求）返回 None，由调用方回退到 LLM。"""
+    tokens = sentence.split()
+    total = len(tokens)
+    if num_parts <= 1 or total > num_parts * word_limit:
+        return None
+    # 收集自然切分点：逗号/分号/括号之后，或连接词之前
+    boundaries = set()
+    for i, tok in enumerate(tokens):
+        if tok.endswith((',', ';', '(', ')')):
+            boundaries.add(i + 1)
+        if i > 0 and tok.strip('()').lower() in _CONJUNCTION_WORDS:
+            boundaries.add(i)
+    boundaries = sorted(b for b in boundaries if 0 < b < total)
+    target = total / num_parts
+    parts = []
+    start = 0
+    for k in range(num_parts - 1):
+        ideal = start + target
+        lo = start + 1
+        hi = min(start + word_limit, total - (num_parts - k - 1))  # 为剩余部分留空间
+        if lo > hi:
+            return None
+        cands = [b for b in boundaries if lo <= b <= hi]
+        if cands:
+            cut = min(cands, key=lambda b: abs(b - ideal))
+        else:
+            cut = max(lo, min(int(round(ideal)), hi))
+        parts.append(' '.join(tokens[start:cut]))
+        start = cut
+    parts.append(' '.join(tokens[start:total]))
+    if any(len(p.split()) > word_limit for p in parts):
+        return None
+    return parts
+
 def find_split_positions(original, modified):
     split_positions = []
     parts = modified.split('[br]')
@@ -47,6 +90,21 @@ def find_split_positions(original, modified):
 
 def split_sentence(sentence, num_parts, word_limit=20, index=-1, retry_attempt=0):
     """Split a long sentence using GPT and return the result as a string."""
+    # 启发式优先：能本地切分就不调 LLM，省 token（split_meaning_heuristic_first=True 时启用）
+    if load_key("split_meaning_heuristic_first"):
+        heuristic_parts = heuristic_split_sentence(sentence, num_parts, word_limit)
+        if heuristic_parts is not None:
+            best_split = '\n'.join(heuristic_parts)
+            if index != -1:
+                console.print(f'[green]✅ Sentence {index} has been successfully split (heuristic)[/green]')
+            table = Table(title="")
+            table.add_column("Type", style="cyan")
+            table.add_column("Sentence")
+            table.add_row("Original", sentence, style="yellow")
+            table.add_row("Split", best_split.replace('\n', ' ||'), style="yellow")
+            console.print(table)
+            return best_split
+
     split_prompt = get_split_prompt(sentence, num_parts, word_limit)
     def valid_split(response_data):
         if "split" not in response_data:

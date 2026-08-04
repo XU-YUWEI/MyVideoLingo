@@ -18,6 +18,13 @@ def split_chunks_by_chars(chunk_size, max_i):
     with open(_3_2_SPLIT_BY_MEANING, "r", encoding="utf-8") as file:
         sentences = file.read().strip().split('\n')
 
+    # 整片一次翻译：全片字符数 ≤ 阈值时，所有字幕行合成一个 chunk 一次调用翻译（最省 token）
+    if load_key("translate_one_shot"):
+        total_chars = sum(len(s) for s in sentences)
+        if total_chars <= load_key("translate_one_shot_max_chars"):
+            console.print(f"[cyan]📦 One-shot translation: {total_chars} chars ≤ {load_key('translate_one_shot_max_chars')}, translating all {len(sentences)} lines in a single call.[/cyan]")
+            return ['\n'.join(sentences)]
+
     chunks = []
     chunk = ''
     sentence_count = 0
@@ -54,7 +61,7 @@ def similar(a, b):
 @check_file_exists(_4_2_TRANSLATION)
 def translate_all():
     console.print("[bold green]Start Translating All...[/bold green]")
-    chunks = split_chunks_by_chars(chunk_size=2000, max_i=40)
+    chunks = split_chunks_by_chars(chunk_size=load_key("translate_chunk_size"), max_i=load_key("translate_max_i"))
     with open(_4_1_TERMINOLOGY, 'r', encoding='utf-8') as file:
         theme_prompt = json.load(file).get('theme')
 

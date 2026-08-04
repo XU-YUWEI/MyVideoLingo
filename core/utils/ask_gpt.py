@@ -1,5 +1,6 @@
 import os
 import json
+import urllib.request
 from threading import Lock
 import json_repair
 from openai import OpenAI
@@ -40,6 +41,37 @@ def _load_cache(prompt, resp_type, log_title):
 # ask gpt once
 # ------------
 
+def _is_ollama(base_url):
+    return "11434" in base_url or "ollama" in base_url.lower()
+
+def _ask_ollama_native(base_url, model, messages, max_tokens=None, timeout=1800):
+    """Call the Ollama native /api/chat endpoint with thinking disabled (think=false).
+
+    The /v1 OpenAI-compatible endpoint of Ollama cannot turn off qwen3 thinking mode,
+    which generates a long reasoning block before every answer (~10x slower). The native
+    endpoint honors the top-level "think": false field. Timeout is generous (30 min) because
+    local models generate one-shot translations of thousands of tokens at single-digit t/s.
+    """
+    root = base_url.strip('/')
+    if root.endswith('/v1'):
+        root = root[:-3]
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": False,
+        "think": False,
+    }
+    if max_tokens:
+        payload["options"] = {"num_predict": int(max_tokens)}
+    req = urllib.request.Request(
+        root + "/api/chat",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    return data.get("message", {}).get("content", "")
+
 @except_handler("GPT request failed", retry=5)
 def ask_gpt(prompt, resp_type=None, valid_def=None, log_title="default"):
     if not load_key("api.key"):
@@ -52,25 +84,43 @@ def ask_gpt(prompt, resp_type=None, valid_def=None, log_title="default"):
 
     model = load_key("api.model")
     base_url = load_key("api.base_url")
-    if 'ark' in base_url:
-        base_url = "https://ark.cn-beijing.volces.com/api/v3" # huoshan base url
-    elif 'v1' not in base_url:
-        base_url = base_url.strip('/') + '/v1'
-    client = OpenAI(api_key=load_key("api.key"), base_url=base_url)
-    response_format = {"type": "json_object"} if resp_type == "json" and load_key("api.llm_support_json") else None
 
     messages = [{"role": "user", "content": prompt}]
 
-    params = dict(
-        model=model,
-        messages=messages,
-        response_format=response_format,
-        timeout=300
-    )
-    resp_raw = client.chat.completions.create(**params)
+    # 本地 Ollama：走原生 /api/chat 并关闭思考模式（qwen3 思考在 /v1 接口上无法关闭，翻译慢约 10 倍）
+    try:
+        use_ollama_native = load_key("api.use_ollama_native")
+    except KeyError:
+        use_ollama_native = False
+    if use_ollama_native and _is_ollama(base_url):
+        try:
+            max_tokens = load_key("api.max_tokens")
+        except KeyError:
+            max_tokens = None
+        resp_content = _ask_ollama_native(base_url, model, messages, max_tokens=max_tokens)
+    else:
+        if 'ark' in base_url:
+            base_url = "https://ark.cn-beijing.volces.com/api/v3" # huoshan base url
+        elif 'v1' not in base_url:
+            base_url = base_url.strip('/') + '/v1'
+        client = OpenAI(api_key=load_key("api.key"), base_url=base_url)
+        response_format = {"type": "json_object"} if resp_type == "json" and load_key("api.llm_support_json") else None
 
-    # process and return full result
-    resp_content = resp_raw.choices[0].message.content
+        params = dict(
+            model=model,
+            messages=messages,
+            response_format=response_format,
+            timeout=300
+        )
+        # 可选：配置 api.max_tokens 防止整片一次翻译/大分块时输出被截断
+        try:
+            max_tokens = load_key("api.max_tokens")
+            if max_tokens:
+                params['max_tokens'] = int(max_tokens)
+        except KeyError:
+            pass
+        resp_raw = client.chat.completions.create(**params)
+        resp_content = resp_raw.choices[0].message.content
     if resp_type == "json":
         resp = json_repair.loads(resp_content)
     else:
