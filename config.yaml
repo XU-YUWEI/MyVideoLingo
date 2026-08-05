@@ -13,13 +13,19 @@ display_language: "zh-CN"
 api:
   key: 'sk-684889fcdbf442178ba3ec0d1e99aff9'
   base_url: 'http://localhost:11434'
-  model: 'qwen3-8k'
+  model: 'qwen3-4k'
   llm_support_json: false
   # *Single response max tokens; prevent output truncation in one-shot/large-batch translation
   max_tokens: 8192
   # *When using Ollama locally, call the native /api/chat endpoint with thinking disabled (think=false).
   # qwen3 thinking mode cannot be turned off via the /v1 OpenAI-compatible endpoint, which slows translation ~10x.
   use_ollama_native: true
+# *Dedicated model for sentence splitting. qwen3-8k follows instructions and outputs the JSON directly,
+# while qwen3-4k tends to write a long analysis that exhausts max_tokens without ever emitting the JSON.
+split_model: 'qwen3-8k'
+# *Dedicated model for translation. qwen3-4k generates ~90 tok/s (vs ~10 tok/s for qwen3-8k), but may
+# misalign lines on long chunks; qwen3-8k is more reliable but ~10x slower.
+translate_model: 'qwen3-4k'
 # *Number of LLM multi-threaded accesses, set to 1 if using local LLM
 max_workers: 1
 
@@ -27,7 +33,7 @@ max_workers: 1
 target_language: '简体中文'
 
 # Whether to use Demucs for vocal separation before transcription
-demucs: true
+demucs: false
 
 whisper:
   # ["large-v3", "large-v3-turbo"]. Note: for zh model will force to use Belle/large-v3
@@ -81,12 +87,12 @@ translate_max_i: 40
 
 # *One-shot translation: when enabled and the whole video text ≤ translate_one_shot_max_chars,
 # all subtitle lines are translated in a single LLM call (minimum tokens). Otherwise falls back to chunked translation.
-translate_one_shot: true
+translate_one_shot: false
 translate_one_shot_max_chars: 8000
 
 # *Compact translation output: when enabled, the translation JSON returns only translations (no origin echo),
 # reducing translation output tokens by ~1/3.
-compact_translate_output: true
+compact_translate_output: false
 
 # *Heuristic-first meaning split: when enabled, long sentences are split locally at punctuation/conjunctions first,
 # and only fall back to LLM when the heuristic fails (saves tokens, slightly less natural split points).

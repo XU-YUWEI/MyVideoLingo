@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import urllib.request
 from threading import Lock
 import json_repair
@@ -27,15 +28,51 @@ def _save_cache(model, prompt, resp_content, resp_type, resp, message=None, log_
         with open(file, 'w', encoding='utf-8') as f:
             json.dump(logs, f, ensure_ascii=False, indent=4)
 
-def _load_cache(prompt, resp_type, log_title):
+def _load_cache(prompt, resp_type, log_title, model):
     with LOCK:
         file = os.path.join(GPT_LOG_FOLDER, f"{log_title}.json")
         if os.path.exists(file):
             with open(file, 'r', encoding='utf-8') as f:
                 for item in json.load(f):
-                    if item["prompt"] == prompt and item["resp_type"] == resp_type:
+                    if item["prompt"] == prompt and item["resp_type"] == resp_type and item.get("model") == model:
                         return item["resp"]
         return False
+
+def _extract_json_text(resp_content: str):
+    """从模型响应中可靠提取 JSON 文本。
+
+    本地 qwen3 模型即使关闭思考模式，也可能在 JSON 前后输出大段分析文本
+    （甚至残留 <think>...</think> 块），直接交给 json_repair 会把整段混合
+    文本解析成错误结构。此处按优先级提取：
+    1) 剥离 <think>...</think> 块
+    2) 优先取 Markdown ```json / ``` 代码块
+    3) 否则从最右侧开括号开始做括号配对，截取完整闭合的 JSON 对象
+
+    若找不到闭合的 JSON（输出被 max_tokens 截断、或响应里根本没有 JSON），
+    返回 None，由调用方抛错触发重试，避免把分析文本里的碎片数组误当结果。
+    """
+    text = str(resp_content)
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    blocks = re.findall(r'```(?:json)?\s*(.*?)```', text, flags=re.DOTALL)
+    for candidate in reversed(blocks):
+        candidate = candidate.strip()
+        if candidate.startswith(('{', '[')):
+            return candidate
+    for open_ch, close_ch in (('{', '}'), ('[', ']')):
+        start = text.rfind(open_ch)
+        if start == -1:
+            continue
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == open_ch:
+                depth += 1
+            elif text[i] == close_ch:
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+        return None  # 开括号之后没有配对的闭括号 → 输出被截断
+    return None
+
 
 # ------------
 # ask gpt once
@@ -73,16 +110,15 @@ def _ask_ollama_native(base_url, model, messages, max_tokens=None, timeout=1800)
     return data.get("message", {}).get("content", "")
 
 @except_handler("GPT request failed", retry=5)
-def ask_gpt(prompt, resp_type=None, valid_def=None, log_title="default"):
+def ask_gpt(prompt, resp_type=None, valid_def=None, log_title="default", model=None):
     if not load_key("api.key"):
         raise ValueError("API key is not set")
-    # check cache
-    cached = _load_cache(prompt, resp_type, log_title)
+    model = model or load_key("api.model")
+    # check cache (per-model: switching models must not reuse another model's cached response)
+    cached = _load_cache(prompt, resp_type, log_title, model)
     if cached:
         rprint("use cache response")
         return cached
-
-    model = load_key("api.model")
     base_url = load_key("api.base_url")
 
     messages = [{"role": "user", "content": prompt}]
@@ -122,7 +158,11 @@ def ask_gpt(prompt, resp_type=None, valid_def=None, log_title="default"):
         resp_raw = client.chat.completions.create(**params)
         resp_content = resp_raw.choices[0].message.content
     if resp_type == "json":
-        resp = json_repair.loads(resp_content)
+        # 本地模型可能在 JSON 前后输出分析文本/思考块，先提取再解析，避免结构错乱
+        extracted = _extract_json_text(resp_content)
+        if extracted is None:
+            raise ValueError("❎ Model output truncated: no complete JSON found in response (max_tokens limit?)")
+        resp = json_repair.loads(extracted)
     else:
         resp = resp_content
     

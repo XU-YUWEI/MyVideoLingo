@@ -54,7 +54,11 @@ def translate_chunk(chunk, chunks, theme_prompt, i):
 
 # 🚀 Main function to translate all chunks
 @check_file_exists(_4_2_TRANSLATION)
-def translate_all():
+def translate_all(progress_callback=None):
+    """翻译所有 chunk 并保存结果。
+
+    progress_callback(done, total)：每完成一个 chunk 回调一次，供页面显示细化进度。
+    """
     console.print("[bold green]Start Translating All...[/bold green]")
     chunks = split_chunks_by_chars(chunk_size=load_key("translate_chunk_size"), max_i=load_key("translate_max_i"))
     with open(_4_1_TERMINOLOGY, 'r', encoding='utf-8') as file:
@@ -69,9 +73,13 @@ def translate_all():
                 future = executor.submit(translate_chunk, chunk, chunks, theme_prompt, i)
                 futures.append(future)
             results = []
+            done_count = 0
             for future in concurrent.futures.as_completed(futures):
                 results.append(future.result())
+                done_count += 1
                 progress.update(task, advance=1)
+                if progress_callback:
+                    progress_callback(done_count, len(chunks))
 
     results.sort(key=lambda x: x[0])  # Sort results based on original order
     

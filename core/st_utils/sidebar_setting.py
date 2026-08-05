@@ -38,22 +38,22 @@ def ollama_running() -> bool:
     except Exception:
         return False
 
-@st.cache_data(ttl=30)
-def installed_qwen_models() -> list:
-    import subprocess
+def unload_ollama_model(model=None) -> bool:
+    """请求 Ollama 立即卸载当前模型（keep_alive=0），释放 llama-server 内存。
+    下次调用时 Ollama 会自动重新加载模型，无需重启服务。"""
+    import json
+    import urllib.request
     try:
-        out = subprocess.run([r"D:\Ollama\ollama.exe", "list"], capture_output=True,
-                             text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
-        models = []
-        for line in out.stdout.splitlines()[1:]:
-            parts = line.split()
-            if parts:
-                name = parts[0].split(':')[0]
-                if name.startswith("qwen3-") and name not in models:
-                    models.append(name)
-        return models
+        base_url = load_key("api.base_url")
+        model = model or load_key("api.model")
+        payload = json.dumps({"model": model, "prompt": "", "keep_alive": 0, "stream": False}).encode()
+        req = urllib.request.Request(base_url.rstrip('/') + "/api/generate", data=payload,
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=30):
+            pass
+        return True
     except Exception:
-        return []
+        return False
 
 def start_ollama_service():
     import subprocess
@@ -110,17 +110,37 @@ def page_setting():
                 start_ollama_service()
                 st.toast(t("Ollama Starting..."))
                 st.rerun()
-            installed = installed_qwen_models()
-            if installed:
-                current_model = load_key("api.model")
-                index = installed.index(current_model) if current_model in installed else 0
-                sel_model = st.selectbox(t("Local Model"), options=installed, index=index,
-                                         help=t("Switch local model. Only installed models are listed."))
-                if sel_model != current_model:
-                    update_key("api.model", sel_model)
+            # --- 释放模型内存：keep_alive=0 立即卸载，下次调用自动重新加载 ---
+            if st.button(t("Release Model Memory"), key="unload_model", disabled=not _running):
+                if unload_ollama_model():
+                    st.toast(t("Model memory released"))
                     st.rerun()
-            else:
-                st.caption(t("No local qwen model installed"))
+                else:
+                    st.error(t("Failed to release model memory"))
+            # --- 本地 qwen 模型分段切换（qwen3-8k / qwen3-4k，不做安装检测）---
+            current_model = load_key("api.model")
+            _opts = ["qwen3-8k", "qwen3-4k"]
+            _idx = _opts.index(current_model) if current_model in _opts else 0
+            sel_model = st.radio(t("Local Model"), options=_opts, index=_idx, horizontal=True,
+                                 help=t("Switch between qwen3-8k and qwen3-4k"))
+            if sel_model != current_model:
+                update_key("api.model", sel_model)
+                st.rerun()
+            # --- 分句 / 翻译专用模型（独立选择；api.model 为其他 LLM 调用（术语/摘要/对齐）的全局默认）---
+            cur_split = load_key("split_model")
+            sel_split = st.radio(t("Split Model"), options=_opts,
+                                 index=_opts.index(cur_split) if cur_split in _opts else 0, horizontal=True,
+                                 help=t("Model for sentence splitting: qwen3-8k follows instructions and outputs JSON directly; qwen3-4k tends to write long analysis that gets truncated"))
+            if sel_split != cur_split:
+                update_key("split_model", sel_split)
+                st.rerun()
+            cur_tr = load_key("translate_model")
+            sel_tr = st.radio(t("Translate Model"), options=_opts,
+                              index=_opts.index(cur_tr) if cur_tr in _opts else 0, horizontal=True,
+                              help=t("Model for translation: qwen3-4k generates ~90 tok/s; qwen3-8k is more reliable on long chunks but ~10x slower"))
+            if sel_tr != cur_tr:
+                update_key("translate_model", sel_tr)
+                st.rerun()
     with st.expander(t("Translation Settings"), expanded=True):
         one_shot = st.toggle(t("One-shot Translation"), value=load_key("translate_one_shot"),
                              help=t("When enabled and the whole subtitle text is short enough (translate_one_shot_max_chars), all lines are translated in a single LLM call to save tokens"))

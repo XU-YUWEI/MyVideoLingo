@@ -39,9 +39,11 @@ def text_processing_section():
             6. {t("Merging subtitles into the video")}
         """, unsafe_allow_html=True)
 
+        show_chunk = st.toggle(t("Show translation chunk progress"), value=True,
+                               help=t("Show per-chunk translation progress and average speed"))
         if not os.path.exists(SUB_VIDEO):
             if st.button(t("Start Processing Subtitles"), key="text_processing_button"):
-                if process_text():
+                if process_text(show_chunk):
                     st.rerun()
         else:
             if load_key("burn_subtitles"):
@@ -53,38 +55,71 @@ def text_processing_section():
                 st.rerun()
             return True
 
-def process_text():
-    """执行字幕处理管线；某一步失败时在页面上明确报错并返回 False（不 rerun，保留错误提示）"""
+def process_text(show_chunk_progress=True):
+    """执行字幕处理管线；显示整体进度条与每步耗时（可选翻译 chunk 级细化进度）。
+    某一步失败时在页面上明确报错并返回 False（不 rerun，保留错误提示）"""
+    import time
+
+    def fmt_dur(sec):
+        sec = int(round(sec))
+        if sec >= 60:
+            return f"{sec // 60} 分 {sec % 60} 秒"
+        return f"{sec} 秒"
+
+    status = st.status(t("Subtitle processing in progress..."), expanded=True)
+    progress = st.progress(0.0, text="")
+
     def _run(step_name, step_func):
+        s_t0 = time.time()
+        status.write(f"⏳ {step_name}")
         print(f"[VideoLingo] 步骤开始: {step_name}", flush=True)
         try:
-            with st.spinner(step_name):
-                step_func()
+            step_func()
         except Exception as e:
             print(f"[VideoLingo] 步骤失败: {step_name} -> {e}", flush=True)
+            status.write(f"❌ {step_name} — 失败（用时 {fmt_dur(time.time() - s_t0)}）")
             st.error(f"❌ 步骤「{step_name}」执行失败，错误信息：\n{e}\n\n修复后可直接再次点击「Start Processing Subtitles」，已完成的步骤会自动跳过。")
             st.exception(e)
             return False
         print(f"[VideoLingo] 步骤完成: {step_name}", flush=True)
-        return True
+        return time.time() - s_t0
 
     def _summarize_and_translate():
         _4_1_summarize.get_summary()
         if load_key("pause_before_translate"):
             input(t("⚠️ PAUSE_BEFORE_TRANSLATE. Go to `output/log/terminology.json` to edit terminology. Then press ENTER to continue..."))
-        _4_2_translate.translate_all()
+        if show_chunk_progress:
+            # 翻译步骤映射到整体进度条 40%~60% 区间，并显示 chunk 数/平均耗时
+            _t0 = time.time()
+            def _cb(done, total):
+                frac = 0.4 + 0.2 * (done / total) if total else 0.6
+                avg = fmt_dur((time.time() - _t0) / done) if done else "-"
+                progress.progress(min(frac, 0.6), text=f"{done}/{total} chunk，平均 {avg}/chunk")
+            _4_2_translate.translate_all(progress_callback=_cb)
+        else:
+            _4_2_translate.translate_all()
 
-    if not _run(t("Using Whisper for transcription..."), _2_asr.transcribe):
-        return False
-    if not _run(t("Splitting long sentences..."), lambda: (_3_1_split_nlp.split_by_spacy(), _3_2_split_meaning.split_sentences_by_meaning())):
-        return False
-    if not _run(t("Summarizing and translating..."), _summarize_and_translate):
-        return False
-    if not _run(t("Processing and aligning subtitles..."), lambda: (_5_split_sub.split_for_sub_main(), _6_gen_sub.align_timestamp_main())):
-        return False
-    if not _run(t("Merging subtitles to video..."), _7_sub_into_vid.merge_subtitles_to_video):
-        return False
+    steps = [
+        (t("Using Whisper for transcription..."), lambda: _2_asr.transcribe()),
+        (t("Splitting long sentences..."), lambda: (_3_1_split_nlp.split_by_spacy(), _3_2_split_meaning.split_sentences_by_meaning())),
+        (t("Summarizing and translating..."), _summarize_and_translate),
+        (t("Processing and aligning subtitles..."), lambda: (_5_split_sub.split_for_sub_main(), _6_gen_sub.align_timestamp_main())),
+        (t("Merging subtitles to video..."), _7_sub_into_vid.merge_subtitles_to_video),
+    ]
 
+    total_t0 = time.time()
+    done_steps = 0
+    for step_name, step_func in steps:
+        el = _run(step_name, step_func)
+        if el is False:
+            return False
+        done_steps += 1
+        progress.progress(done_steps / len(steps), text="")
+        status.write(f"✅ {step_name} — 用时 {fmt_dur(el)}")
+
+    total_el = fmt_dur(time.time() - total_t0)
+    progress.progress(1.0, text="")
+    status.update(label=f"🎉 {t('Subtitle processing complete!')} 总耗时 {total_el}", state="complete")
     st.success(t("Subtitle processing complete! 🎉"))
     st.balloons()
     return True

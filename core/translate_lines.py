@@ -55,7 +55,7 @@ def translate_lines(lines, previous_content_prompt, after_cotent_prompt, things_
                     return False
             return True
         for retry in range(3):
-            result = ask_gpt(prompt+retry* " ", resp_type='json', valid_def=valid_def, log_title=f'translate_{step_name}')
+            result = ask_gpt(prompt+retry* " ", resp_type='json', valid_def=valid_def, log_title=f'translate_{step_name}', model=load_key("translate_model"))
             if len(src_lines) == len(result) and origin_aligned(result):
                 return result
             if retry != 2:
