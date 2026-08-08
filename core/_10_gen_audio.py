@@ -242,5 +242,71 @@ def gen_audio() -> None:
     tasks_df.to_excel(_8_1_AUDIO_TASK, index=False)
     rprint("[bold green]🎉 Audio generation completed successfully![/bold green]")
 
+def process_audio() -> tuple:
+    """
+    只做"后续处理音频步骤"：变速 + 重建时间轴，并保存 Excel。
+    - 不清理 tmp/segs（保留已配好的音频）
+    - 不重新 TTS（不重新配音）
+    - 只处理 temp 临时文件完整的片段；缺失的片段跳过并在返回的 skipped 中列出
+
+    返回: (processed_count, skipped)，skipped 为 [(number, 原因), ...]
+    """
+    os.makedirs(_AUDIO_TMP_DIR, exist_ok=True)
+    os.makedirs(_AUDIO_SEGS_DIR, exist_ok=True)
+
+    tasks_df = pd.read_excel(_8_1_AUDIO_TASK)
+    if tasks_df.empty:
+        raise ValueError("tts_tasks.xlsx 中没有任务数据")
+
+    # 1. 找出 temp 文件完整的片段（缺失的跳过）
+    complete_numbers, skipped = [], []
+    for idx, row in tasks_df.iterrows():
+        number = int(row['number'])
+        lines = eval(row['lines']) if isinstance(row['lines'], str) else row['lines']
+        if not lines:
+            skipped.append((number, "lines 为空"))
+            continue
+        missing = [i for i in range(len(lines))
+                   if not os.path.exists(TEMP_FILE_TEMPLATE.format(f"{number}_{i}"))]
+        if missing:
+            skipped.append((number, f"缺 {len(missing)} 个临时音频"))
+        else:
+            complete_numbers.append(number)
+
+    if not complete_numbers:
+        raise ValueError("没有任何已配音且音频完整的片段可供处理，请先逐行配音")
+
+    # 2. 仅保留完整片段，并由现有 temp 文件计算实际时长 real_dur
+    sub = tasks_df[tasks_df['number'].isin(complete_numbers)].copy().reset_index(drop=True)
+    for i, row in sub.iterrows():
+        number = int(row['number'])
+        lines = eval(row['lines']) if isinstance(row['lines'], str) else row['lines']
+        real_dur = sum(get_audio_duration(TEMP_FILE_TEMPLATE.format(f"{number}_{li}"))
+                       for li in range(len(lines)))
+        sub.at[i, 'real_dur'] = real_dur
+
+    # 保证最后一行是块边界（过滤掉中间缺失片段后，最后一块才能被处理）
+    if len(sub) > 0:
+        sub.at[sub.index[-1], 'cut_off'] = 1
+
+    # 3. 变速 + 重建时间轴（merge_chunks）
+    sub = merge_chunks(sub)
+
+    # 4. 合并回原 df（缺失片段保留旧的 new_sub_times/real_dur）并保存
+    processed_map = {}
+    for _, r in sub.iterrows():
+        processed_map[int(r['number'])] = (r['new_sub_times'], r['real_dur'])
+    for idx, row in tasks_df.iterrows():
+        n = int(row['number'])
+        if n in processed_map:
+            new_sub_times, real_dur = processed_map[n]
+            tasks_df.at[idx, 'new_sub_times'] = new_sub_times
+            tasks_df.at[idx, 'real_dur'] = real_dur
+
+    tasks_df.to_excel(_8_1_AUDIO_TASK, index=False)
+    rprint(f"[bold green]🎉 音频处理完成：{len(complete_numbers)} 个片段已处理，{len(skipped)} 个片段跳过[/bold green]")
+    return len(complete_numbers), skipped
+
+
 if __name__ == "__main__":
     gen_audio()

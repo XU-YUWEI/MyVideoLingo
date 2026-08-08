@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import subprocess
+import numpy as np
 from pydub import AudioSegment
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.console import Console
@@ -19,7 +20,7 @@ def load_and_flatten_data(excel_file):
     lines = [eval(line) if isinstance(line, str) else line for line in df['lines'].tolist()]
     lines = [item for sublist in lines for item in sublist]
     
-    new_sub_times = [eval(time) if isinstance(time, str) else time for time in df['new_sub_times'].tolist()]
+    new_sub_times = [eval(time, {'np': np}) if isinstance(time, str) else time for time in df['new_sub_times'].tolist()]
     new_sub_times = [item for sublist in new_sub_times for item in sublist]
     
     return df, lines, new_sub_times
@@ -52,54 +53,42 @@ def process_audio_segment(audio_file):
     return audio_segment
 
 def merge_audio_segments(audios, new_sub_times, sample_rate):
-    CROSSFADE_MS = 15  # 交叉淡化时长（毫秒），使相邻段落平滑过渡
+    FADE_MS = 10  # 每段淡入/淡出时长（毫秒），消除边界杂音
     merged_audio = AudioSegment.silent(duration=0, frame_rate=sample_rate)
-    
+    pos_ms = 0  # 实际游标：当前已拼接音频的长度（毫秒），用于绝对时间戳定位
+
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), TaskProgressColumn()) as progress:
         merge_task = progress.add_task("🎵 Merging audio segments...", total=len(audios))
-        
+
         for i, (audio_file, time_range) in enumerate(zip(audios, new_sub_times)):
             if not os.path.exists(audio_file):
                 console.print(f"[bold yellow]⚠️  Warning: File {audio_file} does not exist, skipping...[/bold yellow]")
                 progress.advance(merge_task)
                 continue
-                
+
             audio_segment = process_audio_segment(audio_file)
-            # 对每段音频应用淡入/淡出（10ms），消除边界杂音（click/pop）
-            audio_segment = audio_segment.fade_in(10).fade_out(10)
+            # 对每段音频应用淡入/淡出，消除边界杂音（click/pop）
+            audio_segment = audio_segment.fade_in(FADE_MS).fade_out(FADE_MS)
             start_time, end_time = time_range
-            
-            # ── 关键修复：确保每段音频时长等于预期时长 (end_time - start_time) ──
+
+            # 音频长于槽位则裁剪到预期长度（保留淡出效果）；
+            # 短于槽位时不补静音，由下方"绝对定位"自动插入间隔静音，避免累计漂移
             expected_duration_ms = int((end_time - start_time) * 1000)
-            actual_duration_ms = len(audio_segment)
-            if actual_duration_ms < expected_duration_ms:
-                # 实际音频短于预期，在末尾补充静音以对齐时间轴，防止音画不同步
-                padding_ms = expected_duration_ms - actual_duration_ms
-                silence_pad = AudioSegment.silent(duration=padding_ms, frame_rate=sample_rate)
-                audio_segment = audio_segment + silence_pad
-            elif actual_duration_ms > expected_duration_ms:
-                # 实际音频长于预期，裁剪到预期长度（保留淡出效果）
+            if len(audio_segment) > expected_duration_ms:
                 audio_segment = audio_segment[:expected_duration_ms]
-            
-            if i > 0:
-                prev_end = new_sub_times[i-1][1]
-                silence_duration = start_time - prev_end
-                
-                if silence_duration > 0.03:  # 间隔 > 30ms：先插入静音，再以交叉淡化衔接
-                    silence_ms = int(silence_duration * 1000) - CROSSFADE_MS
-                    if silence_ms > 0:
-                        silence = AudioSegment.silent(duration=silence_ms, frame_rate=sample_rate)
-                        merged_audio += silence
-                # 间隔 <= 30ms 或无间隔：直接交叉淡化（重叠过渡）
-                merged_audio = merged_audio.append(audio_segment, crossfade=CROSSFADE_MS)
-            else:
-                if start_time > 0:
-                    silence = AudioSegment.silent(duration=int(start_time * 1000), frame_rate=sample_rate)
-                    merged_audio += silence
-                merged_audio += audio_segment
-                    
+
+            # 绝对时间戳定位：只在"目标开始时间 > 实际游标"时插入静音，其余情况直接追加。
+            # 每段的实际位置由真实拼接长度决定，不再依赖理想时间轴推算，杜绝累计误差。
+            target_start_ms = int(start_time * 1000)
+            if target_start_ms > pos_ms:
+                silence = AudioSegment.silent(duration=target_start_ms - pos_ms, frame_rate=sample_rate)
+                merged_audio += silence
+                pos_ms = target_start_ms
+            merged_audio += audio_segment
+            pos_ms += len(audio_segment)
+
             progress.advance(merge_task)
-    
+
     return merged_audio
 
 def create_srt_subtitle():

@@ -275,6 +275,16 @@ def build_line_role_map(df, trans_srt_entries):
                 role_by_key[(number, j)] = role
             else:
                 unresolved.append((number, j))
+        # 补齐：Excel lines 行数 < SRT 段内行数时（如 lines 缺行/多行被合并成一行），
+        # 为剩余行直接用 SRT 时间匹配行的角色绑定，保证徽章完整显示
+        for j in range(len(ls), len(matched)):
+            role = matched[j][1]
+            cursor += 1
+            if role and (number, j) not in role_by_key:
+                role_map.setdefault(role, []).append((number, j))
+                role_by_key[(number, j)] = role
+            elif not role:
+                unresolved.append((number, j))
     return role_map, role_by_key, unresolved
 
 @st.cache_data(ttl=60)
@@ -800,7 +810,16 @@ def main():
                                 ridx = num_to_idx[num]
                                 ls2 = parse_lines(df.at[ridx, 'lines'])
                                 if j >= len(ls2):
-                                    continue
+                                    # 兜底：lines 缺行时扩展并写回，保证角色音色应用到所有行
+                                    while len(ls2) <= j:
+                                        ls2.append('')
+                                    df.at[ridx, 'lines'] = str(ls2)
+                                    for _col in ('ref_lines', 'instruct_lines'):
+                                        if _col in df.columns:
+                                            _cur = parse_lines(df.at[ridx, _col])
+                                            while len(_cur) < len(ls2):
+                                                _cur.append('')
+                                            df.at[ridx, _col] = str(_cur)
                                 rf = parse_lines(df.at[ridx, 'ref_files'])
                                 while len(rf) <= j:
                                     rf.append('')
@@ -857,10 +876,32 @@ def main():
 
     st.markdown("---")
 
+    # 显示上次"处理音频"的结果（跨 rerun 保留）
+    if "_audio_process_result" in st.session_state:
+        processed, skipped = st.session_state.pop("_audio_process_result")
+        if processed:
+            st.success(f"✅ 已处理 {processed} 个片段（变速 + 时间轴对齐）")
+        if skipped:
+            msg = "；".join(f"片段 {n}: {reason}" for n, reason in skipped)
+            st.warning(f"⚠️ 已跳过 {len(skipped)} 个未配音/音频不完整的片段：{msg}")
+
     # 批量操作按钮行
-    action_col1, action_col2, action_col3, action_col4, action_col5 = st.columns([1, 1, 1, 1, 1])
+    action_col1, action_col2, action_col3, action_col4, action_col5, action_col6 = st.columns([1, 1, 1, 1, 1, 1])
 
     with action_col1:
+        # 处理音频：只做变速 + 时间轴重建，不清理已有配音、不重新 TTS
+        if st.button("⚙️ 处理音频", type="primary", use_container_width=True):
+            with st.spinner("正在处理音频（变速 + 时间轴重建）..."):
+                try:
+                    from core._10_gen_audio import process_audio
+                    processed, skipped = process_audio()
+                    st.session_state["_audio_process_result"] = (processed, skipped)
+                    _invalidate_audio_cache()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ 处理音频失败: {e}")
+
+    with action_col2:
         # 仅生成未配音的片段（增量式，逐行带各自音频/音色与情感指令）
         if st.button("➕ 补齐未配音", use_container_width=True):
             with st.spinner("正在为未配音的片段生成音频..."):
@@ -925,7 +966,7 @@ def main():
                     _invalidate_audio_cache()
                     st.rerun()
 
-    with action_col2:
+    with action_col3:
         # 批量配音（所有片段，并发覆盖，逐行带各自音频/音色与情感指令）
         if st.button("🔊 批量配音", type="primary", use_container_width=True):
             with st.spinner("正在批量配音..."):
@@ -989,7 +1030,7 @@ def main():
                 _invalidate_audio_cache()
                 st.rerun()
 
-    with action_col3:
+    with action_col4:
         # 重新生成配音任务（重新运行 _8_2_dub_chunks）
         if st.button("🔄 重新生成配音任务", use_container_width=True):
             with st.spinner("正在重新生成配音任务..."):
@@ -1002,7 +1043,7 @@ def main():
                 except Exception as e:
                     st.error(f"❌ 重新生成失败: {e}")
 
-    with action_col4:
+    with action_col5:
         # 生成音频任务（运行 _8_1_audio_task + _8_2_dub_chunks）
         if st.button("📋 生成音频任务", use_container_width=True):
             with st.spinner("正在生成音频任务..."):
@@ -1017,7 +1058,7 @@ def main():
                 except Exception as e:
                     st.error(f"❌ 生成音频任务失败: {e}")
 
-    with action_col5:
+    with action_col6:
         # 删除全部配音（所有片段的音频文件）
         if st.button("🗑️ 删除全部配音", type="secondary", use_container_width=True):
             deleted = 0
@@ -1321,8 +1362,9 @@ def main():
                                 saved_val = lines_list[i] if i < len(lines_list) else ''
                                 display_val = saved_val or ll
                                 default_val = st.session_state.get(f"trans_{number}_{i}", display_val)
-                                # 徽章角色与"按角色批量分配"一致（文本匹配，按 Excel 行号）
-                                role_display = role_by_key.get((int(number), i))
+                                # 徽章角色与"按角色批量分配"一致（文本匹配，按 Excel 行号）；
+                                # 未绑定行回退到 SRT 时间匹配行自带的角色，保证每行都显示
+                                role_display = role_by_key.get((int(number), i)) or role
                                 if role_display:
                                     st.caption(f"🎭 {role_display}")
                                 st.text_input(

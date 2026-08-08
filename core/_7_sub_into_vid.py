@@ -118,6 +118,16 @@ def merge_subtitles_to_video():
         ).encode('utf-8'),
     ]
 
+    # 以源视频码率为输出码率上限，避免输出文件体积远超源视频（如源 1.77Mbps 而 CRF23 需 4Mbps）
+    if src_bitrate and src_bitrate != 'N/A' and src_bitrate.isdigit():
+        target_rate = src_bitrate          # 目标码率 = 源视频码率（bps）
+        max_rate = src_bitrate             # 峰值码率上限 = 源视频码率
+        buf_size = str(int(src_bitrate) * 2)  # VBV 缓冲 = 2×源视频码率
+    else:
+        target_rate = '2M'
+        max_rate = '4M'
+        buf_size = '8M'
+
     ffmpeg_gpu = load_key("ffmpeg_gpu")
     if ffmpeg_gpu:
         rprint("[bold green]will use GPU acceleration (NVENC) with quality-based settings.[/bold green]")
@@ -126,9 +136,9 @@ def merge_subtitles_to_video():
             '-preset', 'p5',      # 质量与速度均衡
             '-rc', 'vbr',
             '-cq', '23',          # 恒定质量（0-51，越低质量越高），23 为画质与体积的平衡点
-            '-b:v', '4M',         # 平均码率上限 4Mbps，防止输出文件过大（原 50M 会产生数百 MB~GB 级文件导致 Streamlit 内存崩溃）
-            '-maxrate', '6M',     # 峰值码率上限
-            '-bufsize', '6M',
+            '-b:v', target_rate,  # 目标码率与源一致，防止输出文件过大
+            '-maxrate', max_rate, # 峰值码率上限（源视频码率）
+            '-bufsize', buf_size,
             '-pix_fmt', 'yuv420p'
         ])
     else:
@@ -137,8 +147,8 @@ def merge_subtitles_to_video():
             '-c:v', 'libx264',
             '-crf', '23',         # CRF 23：画质与体积平衡（原 17 接近无损，文件极大）
             '-preset', 'medium',  # medium 预设兼顾速度与压缩率
-            '-maxrate', '6M',     # 峰值码率上限，避免输出文件过大
-            '-bufsize', '6M',
+            '-maxrate', max_rate, # 峰值码率上限（源视频码率），避免输出文件过大
+            '-bufsize', buf_size,
             '-pix_fmt', 'yuv420p'
         ])
     ffmpeg_cmd.extend(['-y', OUTPUT_VIDEO])

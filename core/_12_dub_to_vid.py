@@ -1,3 +1,4 @@
+import os
 import platform
 import subprocess
 
@@ -78,23 +79,32 @@ def merge_video_audio():
         f"BackColour={TRANS_BACK_COLOR},Alignment=2,MarginV=27,BorderStyle={trans_border_style}'"
     )
     
-    # 读取配音音量配置（0.0 ~ 1.0，默认 0.5），降低配音音量使背景音不被盖住
-    try:
-        dub_volume = float(load_key("dub_volume"))
-    except (KeyError, TypeError):
-        dub_volume = 0.5
+    # 配音始终 100% 音量输出（无论是否存在背景音，不再压低配音）
     bg_volume = 1.0  # 背景音保持原始音量
-    
-    cmd = [
-        'ffmpeg', '-y', '-i', VIDEO_FILE, '-i', background_file, '-i', normalized_dub_audio,
-        '-filter_complex',
-        f'[0:v]scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=decrease,'
-        f'pad={TARGET_WIDTH}:{TARGET_HEIGHT}:(ow-iw)/2:(oh-ih)/2,'
-        f'{subtitle_filter}[v];'
-        f'[1:a]volume={bg_volume}[bg];'
-        f'[2:a]volume={dub_volume}[dub];'
-        f'[bg][dub]amix=inputs=2:duration=first:dropout_transition=3[a]'
-    ]
+
+    # 无 Demucs 分离产物（background.mp3）时，不使用背景音，配音（dub.mp3）直接作为输出音轨
+    use_original_audio_as_bg = not os.path.exists(background_file)
+    if use_original_audio_as_bg:
+        rprint("[bold yellow]⚠️ background.mp3 不存在（未开启 Demucs 人声分离），配音直接作为输出音轨[/bold yellow]")
+        cmd = [
+            'ffmpeg', '-y', '-i', VIDEO_FILE, '-i', normalized_dub_audio,
+            '-filter_complex',
+            f'[0:v]scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=decrease,'
+            f'pad={TARGET_WIDTH}:{TARGET_HEIGHT}:(ow-iw)/2:(oh-ih)/2,'
+            f'{subtitle_filter}[v];'
+            f'[1:a]anull[a]'
+        ]
+    else:
+        cmd = [
+            'ffmpeg', '-y', '-i', VIDEO_FILE, '-i', background_file, '-i', normalized_dub_audio,
+            '-filter_complex',
+            f'[0:v]scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=decrease,'
+            f'pad={TARGET_WIDTH}:{TARGET_HEIGHT}:(ow-iw)/2:(oh-ih)/2,'
+            f'{subtitle_filter}[v];'
+            f'[1:a]volume={bg_volume}[bg];'
+            f'[2:a]anull[dub];'
+            f'[bg][dub]amix=inputs=2:duration=first:dropout_transition=3[a]'
+        ]
 
     # 探查源视频编码信息，尽可能保持画质
     probe_cmd = [
@@ -113,29 +123,38 @@ def merge_video_audio():
         src_bitrate = ''
         rprint(f"[bold yellow]Could not probe source video: {e}[/bold yellow]")
 
+    # 以源视频码率为输出码率上限，避免输出文件体积远超源视频（原 GPU 50M/CRF17 会产生 GB 级文件）
+    if src_bitrate and src_bitrate != 'N/A' and src_bitrate.isdigit():
+        target_rate = src_bitrate          # 目标码率 = 源视频码率（bps）
+        max_rate = src_bitrate             # 峰值码率上限 = 源视频码率
+        buf_size = str(int(src_bitrate) * 2)  # VBV 缓冲 = 2×源视频码率
+    else:
+        target_rate = '2M'
+        max_rate = '4M'
+        buf_size = '8M'
+
     if load_key("ffmpeg_gpu"):
-        rprint("[bold green]Using GPU acceleration (NVENC) with high quality settings...[/bold green]")
+        rprint("[bold green]Using GPU acceleration (NVENC) with quality-based settings...[/bold green]")
         cmd.extend(['-map', '[v]', '-map', '[a]',
             '-c:v', 'h264_nvenc',
-            '-cq', '17',          # 恒定质量模式，值越低质量越高
+            '-cq', '23',          # 恒定质量模式，值越低质量越高；23 为画质与体积平衡点
             '-preset', 'p7',      # NVENC 最高质量预设
             '-rc', 'vbr',         # 可变码率
-            '-b:v', '50M',        # 最大码率 50 Mbps
-            '-maxrate', '80M',    # 峰值码率 80 Mbps
-            '-bufsize', '80M',    # 缓冲区大小
+            '-b:v', target_rate,  # 目标码率与源一致，防止输出文件过大
+            '-maxrate', max_rate, # 峰值码率上限（源视频码率）
+            '-bufsize', buf_size,
             '-pix_fmt', 'yuv420p'
         ])
     else:
-        rprint("[bold green]Using CPU encoding with high quality settings (libx264 CRF 17)...[/bold green]")
+        rprint("[bold green]Using CPU encoding with balanced settings (libx264 CRF 23)...[/bold green]")
         cmd.extend(['-map', '[v]', '-map', '[a]',
             '-c:v', 'libx264',
-            '-crf', '17',         # CRF 17 = 视觉无损
-            '-preset', 'slow',    # slow 预设提供更好的压缩效率
+            '-crf', '23',         # CRF 23 = 画质与体积平衡（原 17 接近无损，文件极大）
+            '-preset', 'medium',  # medium 预设兼顾速度与压缩率
+            '-maxrate', max_rate, # 峰值码率上限（源视频码率），避免输出文件过大
+            '-bufsize', buf_size,
             '-pix_fmt', 'yuv420p'
         ])
-        # 如果能获取到源视频码率，使用其作为最大码率限制
-        if src_bitrate and src_bitrate != 'N/A' and src_bitrate.isdigit():
-            cmd.extend(['-maxrate', f'{int(src_bitrate)//1000}k'])
     
     cmd.extend(['-c:a', 'aac', '-b:a', '192k', DUB_VIDEO])  # 提高音频码率至192k
     

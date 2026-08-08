@@ -140,57 +140,57 @@ def gen_dub_chunks():
     df = process_cutoffs(df)
 
     rprint("[📝 Reading] Loading transcript files...")
-    content = open(TRANS_SRT, "r", encoding="utf-8").read()
-    ori_content = open(SRC_SRT, "r", encoding="utf-8").read()
-    
-    # Process subtitle content
-    content_lines = []
-    ori_content_lines = []
-    
-    # Process translated subtitles
-    for block in content.strip().split('\n\n'):
-        lines = [line.strip() for line in block.split('\n') if line.strip()]
-        if len(lines) >= 3:
-            text = ' '.join(lines[2:])
-            text = re.sub(r'\([^)]*\)|（[^）]*）', '', text).strip().replace('-', '')
-            # 剥离行首 [角色N] 标记，避免 TTS 读出
-            text = re.sub(r'^\[[^\]]*\]\s*', '', text)
-            content_lines.append(text)
-            
-    # Process source subtitles (same structure)
-    for block in ori_content.strip().split('\n\n'):
-        lines = [line.strip() for line in block.split('\n') if line.strip()]
-        if len(lines) >= 3:
-            text = ' '.join(lines[2:])
-            text = re.sub(r'\([^)]*\)|（[^）]*）', '', text).strip().replace('-', '')
-            # 剥离行首 [角色N] 标记，避免 TTS 读出
-            text = re.sub(r'^\[[^\]]*\]\s*', '', text)
-            ori_content_lines.append(text)
+    # 解析 SRT 并保留时间，用于按片段时间区间匹配行
+    def parse_srt_with_time(path):
+        entries = []  # (start_sec, end_sec, text)
+        for block in open(path, "r", encoding="utf-8").read().strip().split('\n\n'):
+            lines = [line.strip() for line in block.split('\n') if line.strip()]
+            if len(lines) >= 3:
+                m = re.match(
+                    r'(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})',
+                    lines[1])
+                if not m:
+                    continue
+                def to_sec(g):
+                    return int(g[0]) * 3600 + int(g[1]) * 60 + int(g[2]) + int(g[3]) / 1000
+                start = to_sec(m.groups()[:4])
+                end = to_sec(m.groups()[4:])
+                text = ' '.join(lines[2:])
+                text = re.sub(r'\([^)]*\)|（[^）]*）', '', text).strip().replace('-', '')
+                # 剥离行首 [角色N] 标记，避免 TTS 读出
+                text = re.sub(r'^\[[^\]]*\]\s*', '', text)
+                entries.append((start, end, text))
+        return entries
 
-    # Match processing — 跳过文本匹配，按顺序分配
-    rprint("[🔗 Processing] Assigning subtitle lines sequentially...")
+    def str_time_to_sec(t):
+        parts = str(t).split(':')
+        return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+
+    trans_entries = parse_srt_with_time(TRANS_SRT)
+    ori_entries = parse_srt_with_time(SRC_SRT)
+    content_lines = [t for _, _, t in trans_entries]
+    ori_content_lines = [t for _, _, t in ori_entries]
+    total_split = len(content_lines)
+
+    # 按时间匹配分配：取行中点落在片段时间区间内的 SRT 行（中点唯一归属，避免相邻片段重复匹配）
+    rprint("[🔗 Processing] Assigning subtitle lines by timestamp...")
     df['lines'] = None
     df['src_lines'] = None
-    
-    total_split = len(content_lines)
-    total_merged = len(df)
-    line_idx = 0
 
+    line_idx = 0
     for idx in range(len(df)):
-        remaining_merged = len(df) - idx
-        remaining_split = total_split - line_idx
-        if remaining_merged <= 0:
-            break
-        
-        # 均匀分配剩余的拆分行到剩余的合并行
-        take = remaining_split // remaining_merged
-        if take == 0 and remaining_split > 0:
-            take = 1
-        
-        end_idx = min(line_idx + take, total_split)
-        df.at[idx, 'lines'] = content_lines[line_idx:end_idx]
-        df.at[idx, 'src_lines'] = ori_content_lines[line_idx:end_idx]
-        line_idx = end_idx
+        row = df.iloc[idx]
+        s0 = str_time_to_sec(row['start_time'])
+        e0 = str_time_to_sec(row['end_time'])
+        chunk_trans = [t for a, b, t in trans_entries if s0 <= (a + b) / 2 < e0]
+        chunk_ori = [t for a, b, t in ori_entries if s0 <= (a + b) / 2 < e0]
+        if not chunk_trans and line_idx < total_split:
+            # 兜底：时间匹配失败时按顺序取下一行，保证行数不缺失
+            chunk_trans = [content_lines[line_idx]]
+            chunk_ori = [ori_content_lines[line_idx]] if line_idx < len(ori_content_lines) else ['']
+            line_idx += 1
+        df.at[idx, 'lines'] = chunk_trans
+        df.at[idx, 'src_lines'] = chunk_ori
 
     # Save results
     df.to_excel(_8_1_AUDIO_TASK, index=False)

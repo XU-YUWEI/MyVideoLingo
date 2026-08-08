@@ -39,6 +39,23 @@ def text_processing_section():
             6. {t("Merging subtitles into the video")}
         """, unsafe_allow_html=True)
 
+        # ── 展示最近一次处理耗时（读取 output/log/processing_time.log 最后一条记录）──
+        TIME_LOG = os.path.join("output", "log", "processing_time.log")
+        if os.path.exists(TIME_LOG):
+            with open(TIME_LOG, "r", encoding="utf-8") as f:
+                log_lines = [ln.rstrip("\n") for ln in f.readlines()]
+            last_start = None
+            for i in range(len(log_lines) - 1, -1, -1):
+                if log_lines[i].startswith("─────"):
+                    last_start = i
+                    break
+            if last_start is not None:
+                record = log_lines[last_start:]
+                if record and record[-1] == "":
+                    record = record[:-1]
+                st.expander("⏱️ 最近一次处理耗时", expanded=False).markdown(
+                    "\n\n".join(record))
+
         show_chunk = st.toggle(t("Show translation chunk progress"), value=True,
                                help=t("Show per-chunk translation progress and average speed"))
         if not os.path.exists(SUB_VIDEO):
@@ -57,7 +74,8 @@ def text_processing_section():
 
 def process_text(show_chunk_progress=True):
     """执行字幕处理管线；显示整体进度条与每步耗时（可选翻译 chunk 级细化进度）。
-    某一步失败时在页面上明确报错并返回 False（不 rerun，保留错误提示）"""
+    某一步失败时在页面上明确报错并返回 False（不 rerun，保留错误提示）。
+    每步耗时与总耗时会追加写入 output/log/processing_time.log，历史记录不被覆盖"""
     import time
 
     def fmt_dur(sec):
@@ -65,6 +83,26 @@ def process_text(show_chunk_progress=True):
         if sec >= 60:
             return f"{sec // 60} 分 {sec % 60} 秒"
         return f"{sec} 秒"
+
+    # ── 时间日志：追加模式持久化，记录每次运行的历史耗时 ──
+    TIME_LOG = os.path.join("output", "log", "processing_time.log")
+    os.makedirs(os.path.dirname(TIME_LOG), exist_ok=True)
+    video_name = ""
+    try:
+        from core._1_ytdlp import find_video_files
+        video_name = os.path.basename(find_video_files() or "")
+    except Exception:
+        video_name = ""
+
+    def _log_line(line: str):
+        """向日志文件追加一行（追加模式，保留历史）"""
+        try:
+            with open(TIME_LOG, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except Exception as e:
+            print(f"[VideoLingo] 写入时间日志失败: {e}", flush=True)
+
+    _log_line(f"───── {time.strftime('%Y-%m-%d %H:%M:%S')} ｜ 视频: {video_name or '未知'} ─────")
 
     status = st.status(t("Subtitle processing in progress..."), expanded=True)
     progress = st.progress(0.0, text="")
@@ -76,13 +114,17 @@ def process_text(show_chunk_progress=True):
         try:
             step_func()
         except Exception as e:
+            el = time.time() - s_t0
             print(f"[VideoLingo] 步骤失败: {step_name} -> {e}", flush=True)
-            status.write(f"❌ {step_name} — 失败（用时 {fmt_dur(time.time() - s_t0)}）")
+            status.write(f"❌ {step_name} — 失败（用时 {fmt_dur(el)}）")
+            _log_line(f"  ❌ {step_name}: 失败（用时 {fmt_dur(el)}）")
             st.error(f"❌ 步骤「{step_name}」执行失败，错误信息：\n{e}\n\n修复后可直接再次点击「Start Processing Subtitles」，已完成的步骤会自动跳过。")
             st.exception(e)
             return False
+        el = time.time() - s_t0
         print(f"[VideoLingo] 步骤完成: {step_name}", flush=True)
-        return time.time() - s_t0
+        _log_line(f"  {step_name}: {fmt_dur(el)}")
+        return el
 
     def _summarize_and_translate():
         _4_1_summarize.get_summary()
@@ -118,6 +160,8 @@ def process_text(show_chunk_progress=True):
         status.write(f"✅ {step_name} — 用时 {fmt_dur(el)}")
 
     total_el = fmt_dur(time.time() - total_t0)
+    _log_line(f"── 总耗时: {total_el} ──")
+    _log_line("")
     progress.progress(1.0, text="")
     status.update(label=f"🎉 {t('Subtitle processing complete!')} 总耗时 {total_el}", state="complete")
     st.success(t("Subtitle processing complete! 🎉"))
