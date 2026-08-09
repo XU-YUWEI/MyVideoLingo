@@ -58,20 +58,23 @@ def _extract_json_text(resp_content: str):
         candidate = candidate.strip()
         if candidate.startswith(('{', '[')):
             return candidate
-    for open_ch, close_ch in (('{', '}'), ('[', ']')):
-        start = text.rfind(open_ch)
-        if start == -1:
-            continue
-        depth = 0
-        for i in range(start, len(text)):
-            if text[i] == open_ch:
-                depth += 1
-            elif text[i] == close_ch:
-                depth -= 1
-                if depth == 0:
-                    return text[start:i + 1]
-        return None  # 开括号之后没有配对的闭括号 → 输出被截断
-    return None
+    # 统一括号扫描：同时配对 {} 与 []，返回最后一个完整闭合的顶层 JSON 值。
+    # 正确处理嵌套对象/数组（避免 rfind 内层括号导致只提取到碎片），
+    # 找不到完整闭合（输出被截断）时返回 None 交由调用方触发重试。
+    stack = []  # (open_char, position)
+    closes = {'}': '{', ']': '['}
+    last_complete = None
+    for i, c in enumerate(text):
+        if c in ('{', '['):
+            stack.append((c, i))
+        elif c in ('}', ']'):
+            if stack and stack[-1][0] == closes[c]:
+                _, pos = stack.pop()
+                if not stack:
+                    last_complete = text[pos:i + 1]
+            else:
+                stack.clear()  # 括号不匹配，重置扫描状态
+    return last_complete
 
 
 # ------------
@@ -81,13 +84,17 @@ def _extract_json_text(resp_content: str):
 def _is_ollama(base_url):
     return "11434" in base_url or "ollama" in base_url.lower()
 
-def _ask_ollama_native(base_url, model, messages, max_tokens=None, timeout=1800):
+def _ask_ollama_native(base_url, model, messages, max_tokens=None, timeout=1800, format_json=False):
     """Call the Ollama native /api/chat endpoint with thinking disabled (think=false).
 
     The /v1 OpenAI-compatible endpoint of Ollama cannot turn off qwen3 thinking mode,
     which generates a long reasoning block before every answer (~10x slower). The native
     endpoint honors the top-level "think": false field. Timeout is generous (30 min) because
     local models generate one-shot translations of thousands of tokens at single-digit t/s.
+
+    format_json=True 时设置 "format": "json"，Ollama 用语法约束强制输出合法 JSON。
+    实测 qwen3-4k 对大 chunk 常先输出数千 token 的分析长文/编号列表而非 JSON，
+    format=json 后 100% 输出 JSON 且 token 大幅下降。
     """
     root = base_url.strip('/')
     if root.endswith('/v1'):
@@ -98,6 +105,8 @@ def _ask_ollama_native(base_url, model, messages, max_tokens=None, timeout=1800)
         "stream": False,
         "think": False,
     }
+    if format_json:
+        payload["format"] = "json"
     if max_tokens:
         payload["options"] = {"num_predict": int(max_tokens)}
     req = urllib.request.Request(
@@ -133,7 +142,7 @@ def ask_gpt(prompt, resp_type=None, valid_def=None, log_title="default", model=N
             max_tokens = load_key("api.max_tokens")
         except KeyError:
             max_tokens = None
-        resp_content = _ask_ollama_native(base_url, model, messages, max_tokens=max_tokens)
+        resp_content = _ask_ollama_native(base_url, model, messages, max_tokens=max_tokens, format_json=(resp_type == "json"))
     else:
         if 'ark' in base_url:
             base_url = "https://ark.cn-beijing.volces.com/api/v3" # huoshan base url
@@ -161,7 +170,10 @@ def ask_gpt(prompt, resp_type=None, valid_def=None, log_title="default", model=N
         # 本地模型可能在 JSON 前后输出分析文本/思考块，先提取再解析，避免结构错乱
         extracted = _extract_json_text(resp_content)
         if extracted is None:
-            raise ValueError("❎ Model output truncated: no complete JSON found in response (max_tokens limit?)")
+            # 注意：多数情况并非 max_tokens 截断，而是模型没按指令输出 JSON
+            # （如 qwen3-4k 对大 chunk 输出分析长文/编号列表）。已通过 format=json 约束，
+            # 若仍走到这里，多半是模型输出过短（空/错误格式）。
+            raise ValueError("❎ Model output is not valid JSON (no complete JSON found in response). Check raw response in logs")
         resp = json_repair.loads(extracted)
     else:
         resp = resp_content

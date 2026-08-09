@@ -35,6 +35,14 @@ def transcribe():
     if runtime == "local":
         from core.asr_backend.whisperX_local import transcribe_audio as ts
         rprint("[cyan]🎤 Transcribing audio with local model...[/cyan]")
+        # 转录前释放 Ollama 模型显存，把 GPU 让给 WhisperX（下次调用 LLM 时会自动重新加载）
+        try:
+            from core.st_utils.sidebar_setting import unload_ollama_model
+            for _m in (load_key("api.model"), load_key("split_model"), load_key("translate_model")):
+                if _m and unload_ollama_model(_m):
+                    rprint(f"[cyan]🧹 已释放 Ollama 模型显存: {_m}[/cyan]")
+        except Exception as _e:
+            rprint(f"[yellow]⚠️ 释放 Ollama 模型显存失败: {_e}[/yellow]")
     elif runtime == "cloud":
         from core.asr_backend.whisperX_302 import transcribe_audio_302 as ts
         rprint("[cyan]🎤 Transcribing audio with 302 API...[/cyan]")

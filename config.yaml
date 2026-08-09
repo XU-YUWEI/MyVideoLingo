@@ -37,10 +37,10 @@ demucs: true
 
 whisper:
   # ["large-v3", "large-v3-turbo"]. Note: for zh model will force to use Belle/large-v3
-  model: 'small'
+  model: 'medium'
   # Whisper specified recognition language ISO 639-1
   language: 'en'
-  model_size: 'large-v3'
+  model_size: 'medium'
   detected_language: 'en'
   # Whisper running mode ["local", "cloud", "elevenlabs"]. Specifies where to run, cloud uses 302.ai API
   runtime: 'local'
@@ -82,8 +82,8 @@ summary_length: 2000
 
 # *Translation chunking: chars per chunk & max lines per chunk.
 # 云端可调大省 token（如 2000/40）；本地模型建议 1000/20，避免超时和上下文溢出
-translate_chunk_size: 2000
-translate_max_i: 40
+translate_chunk_size: 1500
+translate_max_i: 20
 
 # *One-shot translation: when enabled and the whole video text ≤ translate_one_shot_max_chars,
 # all subtitle lines are translated in a single LLM call (minimum tokens). Otherwise falls back to chunked translation.
