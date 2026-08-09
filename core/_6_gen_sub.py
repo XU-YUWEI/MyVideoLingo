@@ -127,6 +127,31 @@ def get_sentence_timestamps(df_words, df_sentences):
     
     return time_stamp_list
 
+def fix_display_timing(timestamps, pad=0.1, min_dur=1.2):
+    """修正显示字幕时间轴：消重叠 + 最小时长 + 时间微调。
+
+    - 时间微调: Whisper 词级时间戳普遍略偏晚，每句开始提前 pad、结束延后 pad
+    - 消重叠: 当前句结束不晚于下一句开始，开始不早于上一句结束
+    - 最小时长: 过短的字幕向后延长到 min_dur（不超过下一句开始）
+    返回新的 (start, end) 列表（单位：秒）。
+    """
+    result = []
+    for i, (s, e) in enumerate(timestamps):
+        s = max(0.0, s - pad)
+        e = e + pad
+        # 消重叠：开始不早于上一句结束
+        if result:
+            s = max(s, result[-1][1])
+        # 消重叠：结束不晚于下一句开始
+        next_start = timestamps[i + 1][0] if i + 1 < len(timestamps) else e
+        e = min(e, next_start)
+        # 最小时长：过短则向后延长（不越过下一句开始）
+        if e - s < min_dur:
+            e = min(s + min_dur, next_start)
+        result.append((s, e))
+    return result
+
+
 def align_timestamp(df_text, df_translate, subtitle_output_configs: list, output_dir: str, for_display: bool = True):
     """Align timestamps and add a new timestamp column to df_translate"""
     df_trans_time = df_translate.copy()
@@ -152,6 +177,12 @@ def align_timestamp(df_text, df_translate, subtitle_output_configs: list, output
         delta_time = df_trans_time.loc[i+1, 'timestamp'][0] - df_trans_time.loc[i, 'timestamp'][1]
         if 0 < delta_time < 1:
             df_trans_time.at[i, 'timestamp'] = (df_trans_time.loc[i, 'timestamp'][0], df_trans_time.loc[i+1, 'timestamp'][0])
+
+    # 显示字幕时间轴修正：消重叠 + 最小时长 + 时间微调（仅用于显示字幕，配音字幕保持原始时间轴）
+    if for_display:
+        pad = load_key("subtitle.time_pad")
+        min_dur = load_key("subtitle.min_display_duration")
+        df_trans_time['timestamp'] = fix_display_timing(df_trans_time['timestamp'].tolist(), pad=pad, min_dur=min_dur)
 
     # Convert start and end timestamps to SRT format
     df_trans_time['timestamp'] = df_trans_time['timestamp'].apply(lambda x: convert_to_srt_format(x[0], x[1]))

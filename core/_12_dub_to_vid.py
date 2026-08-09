@@ -123,38 +123,31 @@ def merge_video_audio():
         src_bitrate = ''
         rprint(f"[bold yellow]Could not probe source video: {e}[/bold yellow]")
 
-    # 以源视频码率为输出码率上限，避免输出文件体积远超源视频（原 GPU 50M/CRF17 会产生 GB 级文件）
-    if src_bitrate and src_bitrate != 'N/A' and src_bitrate.isdigit():
-        target_rate = src_bitrate          # 目标码率 = 源视频码率（bps）
-        max_rate = src_bitrate             # 峰值码率上限 = 源视频码率
-        buf_size = str(int(src_bitrate) * 2)  # VBV 缓冲 = 2×源视频码率
-    else:
-        target_rate = '2M'
-        max_rate = '4M'
-        buf_size = '8M'
+    # 编码器配置：hevc（默认）| h264。HEVC 效率比 H.264 高约 50%，
+    # 源视频（如 AV1@1.5M）转 H.264 且码率被限制在源码率时画质会明显下降，改用 HEVC + CQ 恒定质量。
+    encoder = load_key("ffmpeg_encoder") or 'hevc'
+    cq = load_key("ffmpeg_cq") or 23
+    crf = load_key("ffmpeg_crf") or 18
 
     if load_key("ffmpeg_gpu"):
-        rprint("[bold green]Using GPU acceleration (NVENC) with quality-based settings...[/bold green]")
+        rprint(f"[bold green]Using GPU acceleration (NVENC, {encoder}, CQ {cq})...[/bold green]")
         cmd.extend(['-map', '[v]', '-map', '[a]',
-            '-c:v', 'h264_nvenc',
-            '-cq', '23',          # 恒定质量模式，值越低质量越高；23 为画质与体积平衡点
+            '-c:v', f'{encoder}_nvenc',
             '-preset', 'p7',      # NVENC 最高质量预设
-            '-rc', 'vbr',         # 可变码率
-            '-b:v', target_rate,  # 目标码率与源一致，防止输出文件过大
-            '-maxrate', max_rate, # 峰值码率上限（源视频码率）
-            '-bufsize', buf_size,
+            '-rc', 'vbr',
+            '-cq', str(cq),       # 恒定质量，不再限制峰值码率
             '-pix_fmt', 'yuv420p'
         ])
     else:
-        rprint("[bold green]Using CPU encoding with balanced settings (libx264 CRF 23)...[/bold green]")
+        rprint(f"[bold green]Using CPU encoding (libx{encoder}, CRF {crf})...[/bold green]")
         cmd.extend(['-map', '[v]', '-map', '[a]',
-            '-c:v', 'libx264',
-            '-crf', '23',         # CRF 23 = 画质与体积平衡（原 17 接近无损，文件极大）
-            '-preset', 'medium',  # medium 预设兼顾速度与压缩率
-            '-maxrate', max_rate, # 峰值码率上限（源视频码率），避免输出文件过大
-            '-bufsize', buf_size,
+            '-c:v', f'libx{encoder}',
+            '-crf', str(crf),     # 恒定质量，画质优先
+            '-preset', 'slow',
             '-pix_fmt', 'yuv420p'
         ])
+    if encoder == 'hevc':
+        cmd.extend(['-tag:v', 'hvc1'])  # hvc1 标签，提升播放器兼容性
     
     cmd.extend(['-c:a', 'aac', '-b:a', '192k', DUB_VIDEO])  # 提高音频码率至192k
     
