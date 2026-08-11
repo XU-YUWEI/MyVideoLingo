@@ -5,6 +5,13 @@ import shutil
 import time
 from functools import partial
 
+# 在加载 pandas/torch 等重库之前先加载 onnxruntime：
+# 若先 import pandas，onnxruntime_pybind11_state 的 DLL 会初始化失败（WinError 1114）
+try:
+    import onnxruntime  # noqa: F401
+except Exception:
+    pass
+
 import pandas as pd
 from rich.console import Console
 from rich.panel import Panel
@@ -13,7 +20,7 @@ from batch.utils.settings_check import check_settings
 from core import *
 from core._1_ytdlp import find_video_files
 from core.utils.config_utils import load_key, update_key
-from core.utils.onekeycleanup import cleanup
+from core.utils.onekeycleanup import cleanup, get_video_history_name
 
 console = Console()
 
@@ -54,10 +61,32 @@ def record_and_update_config(source_language: str, target_language: str):
     return original_source_lang, original_target_lang
 
 
+def record_and_update_persona_map(row):
+    """把任务行的 Speaker1/2/3（角色1/2/3 的音色名）覆盖合并进 qwen3_tts.persona_map。
+    返回 (原映射, 是否发生变更)，供处理完恢复。"""
+    try:
+        original = load_key('qwen3_tts.persona_map')
+    except KeyError:
+        return None, False
+    merged = dict(original or {})
+    changed = False
+    for i in (1, 2, 3):
+        val = row.get(f'Speaker{i}')
+        if not pd.isna(val) and str(val).strip():
+            key = f'角色{i}'
+            new_val = str(val).strip()
+            if merged.get(key) != new_val:
+                merged[key] = new_val
+                changed = True
+    if changed:
+        update_key('qwen3_tts.persona_map', merged)
+    return original, changed
+
+
 def prepare_output_folder(video_file: str = None):
     """清空 output/ 并从 output/audio/<视频名>/ 恢复中间文件"""
     video_name = os.path.splitext(video_file)[0] if video_file else None
-    audio_sub_dir = os.path.join(SAVE_DIR, video_name) if video_name else None
+    audio_sub_dir = os.path.join(SAVE_DIR, get_video_history_name(video_name)) if video_name else None
 
     # 1) 先将 output/audio/<视频名>/（如果存在）备份到临时目录
     temp_backup = None
@@ -98,7 +127,7 @@ def prepare_output_folder(video_file: str = None):
 
 def save_audio_subtitles(video_file: str):
     """将 output/audio/ 下的 .srt 文件保存到 output/audio/<视频名>/"""
-    video_name = os.path.splitext(video_file)[0]
+    video_name = get_video_history_name(os.path.splitext(video_file)[0])
     audio_dir = os.path.join(OUTPUT_DIR, 'audio')
     audio_sub_dir = os.path.join(audio_dir, video_name)
 
@@ -116,7 +145,7 @@ def save_audio_subtitles(video_file: str):
 
 def restore_from_error(video_file: str):
     """从 batch/output/ERROR/<视频名>/ 恢复中间产物到 output/"""
-    video_name = os.path.splitext(video_file)[0]
+    video_name = get_video_history_name(os.path.splitext(video_file)[0])
     error_folder = os.path.join(ERROR_OUTPUT_DIR, video_name)
 
     if not os.path.exists(error_folder):
@@ -217,6 +246,10 @@ def process_batch_dubbing():
         raise Exception("配置校验未通过，请检查 batch/tasks_setting.xlsx")
 
     df = pd.read_excel(SETTINGS_FILE)
+    # 确保角色音色覆盖列存在（旧表自动补空列，不填则用 config 默认映射）
+    for col in ('Speaker1', 'Speaker2', 'Speaker3'):
+        if col not in df.columns:
+            df[col] = None
     total = len(df)
 
     for index, row in df.iterrows():
@@ -254,6 +287,9 @@ def process_batch_dubbing():
         target_language = row['Target Language']
         orig_src, orig_tgt = record_and_update_config(source_language, target_language)
 
+        # ── 角色音色覆盖（Speaker1/2/3，处理完恢复）──
+        orig_persona_map, persona_changed = record_and_update_persona_map(row)
+
         try:
             success, error_step, error_msg = process_single_video(video_file, is_retry)
             dub_status_msg = "Done" if success else f"Error: {error_step} - {error_msg}"
@@ -264,6 +300,8 @@ def process_batch_dubbing():
             # ── 恢复配置 ──
             update_key('whisper.language', orig_src)
             update_key('target_language', orig_tgt)
+            if persona_changed and orig_persona_map is not None:
+                update_key('qwen3_tts.persona_map', orig_persona_map)
             df.at[index, 'DubbingStatus'] = dub_status_msg
 
             # ── 写回 Excel（多次重试，防止文件被 Excel 占用）──

@@ -30,7 +30,7 @@ translate_model: 'qwen3-4k'
 max_workers: 1
 
 # Language settings, written into the prompt, can be described in natural language
-target_language: '简体中文'
+target_language: 'zh'
 
 # Whether to use Demucs for vocal separation before transcription
 demucs: true
@@ -194,6 +194,14 @@ qwen3_tts:
   size: '0.6B'
   # 情感指令（可选），服务端 fn_voice_clone 支持时生效，如: 带点哭腔、用温柔的语气
   instruct: ''
+  # 批量配音按角色分配固化音色（角色N -> personas 目录中的音色名）
+  # 优先级: tasks_setting.xlsx 的 Speaker1/2/3 列覆盖 > 此处默认映射
+  persona_map:
+    '角色1': '李老师'
+    '角色2': '旁白'
+    '角色3': '韩立'
+  # 未映射到 persona_map 的行（无 [角色N] 标记 / 角色4+）使用的音色
+  fallback_persona: '旁白'
 f5tts:
   302_api: 'YOUR_302_API_KEY'
 

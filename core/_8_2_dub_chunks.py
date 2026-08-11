@@ -129,6 +129,20 @@ def process_cutoffs(df):
     
     return df
 
+def resolve_persona(speaker):
+    """根据行首角色标记解析固化音色名。
+    优先级: config 中已合并的 Excel 覆盖 > qwen3_tts.persona_map > qwen3_tts.fallback_persona。
+    无标记 / 未映射 一律回退 fallback_persona（默认旁白）。"""
+    try:
+        persona_map = load_key("qwen3_tts.persona_map") or {}
+        fallback = load_key("qwen3_tts.fallback_persona") or ""
+    except KeyError:
+        persona_map, fallback = {}, ""
+    if speaker and speaker in persona_map:
+        return persona_map[speaker]
+    return fallback
+
+
 def gen_dub_chunks():
     rprint("[🎬 Starting] Generating dubbing chunks...")
     df = pd.read_excel(_8_1_AUDIO_TASK)
@@ -140,9 +154,9 @@ def gen_dub_chunks():
     df = process_cutoffs(df)
 
     rprint("[📝 Reading] Loading transcript files...")
-    # 解析 SRT 并保留时间，用于按片段时间区间匹配行
+    # 解析 SRT 并保留时间与角色标记，用于按片段时间区间匹配行
     def parse_srt_with_time(path):
-        entries = []  # (start_sec, end_sec, text)
+        entries = []  # (start_sec, end_sec, text, speaker)
         for block in open(path, "r", encoding="utf-8").read().strip().split('\n\n'):
             lines = [line.strip() for line in block.split('\n') if line.strip()]
             if len(lines) >= 3:
@@ -157,9 +171,13 @@ def gen_dub_chunks():
                 end = to_sec(m.groups()[4:])
                 text = ' '.join(lines[2:])
                 text = re.sub(r'\([^)]*\)|（[^）]*）', '', text).strip().replace('-', '')
-                # 剥离行首 [角色N] 标记，避免 TTS 读出
-                text = re.sub(r'^\[[^\]]*\]\s*', '', text)
-                entries.append((start, end, text))
+                # 提取行首 [角色N] 标记并剥离，避免 TTS 读出；无标记则 speaker 为 None
+                speaker = None
+                tag = re.match(r'^\[([^\]]*)\]\s*', text)
+                if tag:
+                    speaker = tag.group(1).strip()
+                    text = text[tag.end():]
+                entries.append((start, end, text, speaker))
         return entries
 
     def str_time_to_sec(t):
@@ -168,29 +186,34 @@ def gen_dub_chunks():
 
     trans_entries = parse_srt_with_time(TRANS_SRT)
     ori_entries = parse_srt_with_time(SRC_SRT)
-    content_lines = [t for _, _, t in trans_entries]
-    ori_content_lines = [t for _, _, t in ori_entries]
+    content_lines = [t for _, _, t, _ in trans_entries]
+    ori_content_lines = [t for _, _, t, _ in ori_entries]
+    speaker_lines = [s for _, _, _, s in trans_entries]
     total_split = len(content_lines)
 
     # 按时间匹配分配：取行中点落在片段时间区间内的 SRT 行（中点唯一归属，避免相邻片段重复匹配）
     rprint("[🔗 Processing] Assigning subtitle lines by timestamp...")
     df['lines'] = None
     df['src_lines'] = None
+    df['persona_lines'] = None
 
     line_idx = 0
     for idx in range(len(df)):
         row = df.iloc[idx]
         s0 = str_time_to_sec(row['start_time'])
         e0 = str_time_to_sec(row['end_time'])
-        chunk_trans = [t for a, b, t in trans_entries if s0 <= (a + b) / 2 < e0]
-        chunk_ori = [t for a, b, t in ori_entries if s0 <= (a + b) / 2 < e0]
+        chunk_trans = [t for a, b, t, _ in trans_entries if s0 <= (a + b) / 2 < e0]
+        chunk_ori = [t for a, b, t, _ in ori_entries if s0 <= (a + b) / 2 < e0]
+        chunk_spk = [s for a, b, _, s in trans_entries if s0 <= (a + b) / 2 < e0]
         if not chunk_trans and line_idx < total_split:
             # 兜底：时间匹配失败时按顺序取下一行，保证行数不缺失
             chunk_trans = [content_lines[line_idx]]
             chunk_ori = [ori_content_lines[line_idx]] if line_idx < len(ori_content_lines) else ['']
+            chunk_spk = [speaker_lines[line_idx]] if line_idx < len(speaker_lines) else [None]
             line_idx += 1
         df.at[idx, 'lines'] = chunk_trans
         df.at[idx, 'src_lines'] = chunk_ori
+        df.at[idx, 'persona_lines'] = [resolve_persona(s) for s in chunk_spk]
 
     # Save results
     df.to_excel(_8_1_AUDIO_TASK, index=False)

@@ -1,3 +1,10 @@
+# 在加载 pandas/torch 等重库之前先加载 onnxruntime：
+# 若先 import pandas，onnxruntime_pybind11_state 的 DLL 会初始化失败（WinError 1114）
+try:
+    import onnxruntime  # noqa: F401
+except Exception:
+    pass
+
 import streamlit as st
 import os, sys
 import debugpy

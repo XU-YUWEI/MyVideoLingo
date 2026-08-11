@@ -66,10 +66,16 @@ def process_row(row: pd.Series, tasks_df: pd.DataFrame) -> Tuple[int, float]:
     """Helper function for processing single row data"""
     number = row['number']
     lines = eval(row['lines']) if isinstance(row['lines'], str) else row['lines']
+    # 每行对应的固化音色（persona_lines 与 lines 等长；旧数据无该列则全部回落全局音色）
+    persona_lines = None
+    if 'persona_lines' in row and not pd.isna(row['persona_lines']):
+        persona_lines = eval(row['persona_lines']) if isinstance(row['persona_lines'], str) else row['persona_lines']
+    if not persona_lines or len(persona_lines) < len(lines):
+        persona_lines = [''] * len(lines)
     real_dur = 0
     for line_index, line in enumerate(lines):
         temp_file = TEMP_FILE_TEMPLATE.format(f"{number}_{line_index}")
-        tts_main(line, temp_file, number, tasks_df)
+        tts_main(line, temp_file, number, tasks_df, persona_name=persona_lines[line_index] or None)
         real_dur += get_audio_duration(temp_file)
     return number, real_dur
 

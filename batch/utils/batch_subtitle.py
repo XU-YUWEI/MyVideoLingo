@@ -4,6 +4,14 @@ import shutil
 import time
 from functools import partial
 
+# 在加载 pandas/torch 等重库之前先加载 onnxruntime：
+# 若先 import pandas，onnxruntime_pybind11_state 的 DLL 会初始化失败（WinError 1114），
+# 进而导致 whisper 步骤中 pyannote/torchmetrics 的导入全部失败
+try:
+    import onnxruntime  # noqa: F401
+except Exception:
+    pass
+
 import pandas as pd
 from rich.console import Console
 from rich.panel import Panel
@@ -12,7 +20,7 @@ from batch.utils.settings_check import check_settings
 from core import *
 from core._1_ytdlp import find_video_files
 from core.utils.config_utils import load_key, update_key
-from core.utils.onekeycleanup import cleanup
+from core.utils.onekeycleanup import cleanup, get_video_history_name
 
 console = Console()
 
@@ -46,7 +54,7 @@ def prepare_output_folder():
 
 def restore_from_error(video_file: str):
     """从 batch/output/ERROR/<视频名>/ 恢复中间产物到 output/"""
-    video_name = os.path.splitext(video_file)[0]
+    video_name = get_video_history_name(os.path.splitext(video_file)[0])
     error_folder = os.path.join(ERROR_OUTPUT_DIR, video_name)
 
     if not os.path.exists(error_folder):

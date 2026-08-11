@@ -1,8 +1,17 @@
 import os
 import gc
+
+# 在加载 pandas/torch 等重库之前先加载 onnxruntime：
+# 若先 import pandas，onnxruntime_pybind11_state 的 DLL 会初始化失败（WinError 1114）
+try:
+    import onnxruntime  # noqa: F401
+except Exception:
+    pass
+
 from batch.utils.settings_check import check_settings
 from batch.utils.video_processor import process_video
 from core.utils.config_utils import load_key, update_key
+from core.utils.onekeycleanup import get_video_history_name
 import pandas as pd
 from rich.console import Console
 from rich.panel import Panel
@@ -37,7 +46,7 @@ def process_batch():
                                  title="[bold yellow]Retry Task", expand=False))
                 
                 # Restore files from batch/output/ERROR to output
-                error_folder = os.path.join('batch', 'output', 'ERROR', os.path.splitext(video_file)[0])
+                error_folder = os.path.join('batch', 'output', 'ERROR', get_video_history_name(os.path.splitext(video_file)[0]))
                 
                 if os.path.exists(error_folder):
                     # Ensure the output folder exists

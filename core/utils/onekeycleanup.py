@@ -1,18 +1,28 @@
 import os
 import glob
+import hashlib
 from core._1_ytdlp import find_video_files
 import shutil
+
+def get_video_history_name(video_name):
+    """生成用于 batch/output、batch/output/ERROR 下的文件夹名。
+    超长标题（>48 字符）截断到 40 字符并追加 8 位哈希后缀，
+    避免 Windows 260 字符路径限制（MAX_PATH）导致移动/恢复失败。"""
+    name = sanitize_filename(video_name)
+    if len(name) <= 48:
+        return name
+    suffix = hashlib.md5(video_name.encode('utf-8')).hexdigest()[:8]
+    return name[:40] + '_' + suffix
 
 def cleanup(history_dir="history"):
     # Get video file name
     video_file = find_video_files()
     video_name = video_file.split("/")[1]
     video_name = os.path.splitext(video_name)[0]
-    video_name = sanitize_filename(video_name)
-    
+
     # Create required folders
     os.makedirs(history_dir, exist_ok=True)
-    video_history_dir = os.path.join(history_dir, video_name)
+    video_history_dir = os.path.join(history_dir, get_video_history_name(video_name))
     log_dir = os.path.join(video_history_dir, "log")
     gpt_log_dir = os.path.join(video_history_dir, "gpt_log")
     os.makedirs(log_dir, exist_ok=True)
