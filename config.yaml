@@ -202,6 +202,12 @@ qwen3_tts:
     '角色3': '韩立'
   # 未映射到 persona_map 的行（无 [角色N] 标记 / 角色4+）使用的音色
   fallback_persona: '旁白'
+  # 批量配音按角色设置情感指令（角色N -> 指令文本，仅 Qwen3TTS 且服务端支持时生效）
+  # 优先级: tasks_setting.xlsx 的 Instruct1/2/3 列覆盖 > 此处默认映射 > 全局 instruct
+  instruct_map:
+    '角色1': ''
+    '角色2': ''
+    '角色3': ''
 f5tts:
   302_api: 'YOUR_302_API_KEY'
 

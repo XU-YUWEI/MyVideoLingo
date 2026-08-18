@@ -83,6 +83,28 @@ def record_and_update_persona_map(row):
     return original, changed
 
 
+def record_and_update_instruct_map(row):
+    """把任务行的 Instruct1/2/3（角色1/2/3 的情感指令）覆盖合并进 qwen3_tts.instruct_map。
+    返回 (原映射, 是否发生变更)，供处理完恢复。"""
+    try:
+        original = load_key('qwen3_tts.instruct_map')
+    except KeyError:
+        return None, False
+    merged = dict(original or {})
+    changed = False
+    for i in (1, 2, 3):
+        val = row.get(f'Instruct{i}')
+        if not pd.isna(val) and str(val).strip():
+            key = f'角色{i}'
+            new_val = str(val).strip()
+            if merged.get(key) != new_val:
+                merged[key] = new_val
+                changed = True
+    if changed:
+        update_key('qwen3_tts.instruct_map', merged)
+    return original, changed
+
+
 def prepare_output_folder(video_file: str = None):
     """清空 output/ 并从 output/audio/<视频名>/ 恢复中间文件"""
     video_name = os.path.splitext(video_file)[0] if video_file else None
@@ -246,8 +268,8 @@ def process_batch_dubbing():
         raise Exception("配置校验未通过，请检查 batch/tasks_setting.xlsx")
 
     df = pd.read_excel(SETTINGS_FILE)
-    # 确保角色音色覆盖列存在（旧表自动补空列，不填则用 config 默认映射）
-    for col in ('Speaker1', 'Speaker2', 'Speaker3'):
+    # 确保角色音色/指令覆盖列存在（旧表自动补空列，不填则用 config 默认映射）
+    for col in ('Speaker1', 'Speaker2', 'Speaker3', 'Instruct1', 'Instruct2', 'Instruct3'):
         if col not in df.columns:
             df[col] = None
     total = len(df)
@@ -287,8 +309,9 @@ def process_batch_dubbing():
         target_language = row['Target Language']
         orig_src, orig_tgt = record_and_update_config(source_language, target_language)
 
-        # ── 角色音色覆盖（Speaker1/2/3，处理完恢复）──
+        # ── 角色音色/指令覆盖（Speaker1/2/3、Instruct1/2/3，处理完恢复）──
         orig_persona_map, persona_changed = record_and_update_persona_map(row)
+        orig_instruct_map, instruct_changed = record_and_update_instruct_map(row)
 
         try:
             success, error_step, error_msg = process_single_video(video_file, is_retry)
@@ -302,6 +325,8 @@ def process_batch_dubbing():
             update_key('target_language', orig_tgt)
             if persona_changed and orig_persona_map is not None:
                 update_key('qwen3_tts.persona_map', orig_persona_map)
+            if instruct_changed and orig_instruct_map is not None:
+                update_key('qwen3_tts.instruct_map', orig_instruct_map)
             df.at[index, 'DubbingStatus'] = dub_status_msg
 
             # ── 写回 Excel（多次重试，防止文件被 Excel 占用）──

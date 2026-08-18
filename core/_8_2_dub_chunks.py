@@ -143,6 +143,19 @@ def resolve_persona(speaker):
     return fallback
 
 
+def resolve_instruct(speaker):
+    """根据行首角色标记解析情感指令。
+    优先级: config 中已合并的 Excel 覆盖 > qwen3_tts.instruct_map。
+    无标记 / 未映射 返回空串（调用侧回落全局 qwen3_tts.instruct）。"""
+    try:
+        instruct_map = load_key("qwen3_tts.instruct_map") or {}
+    except KeyError:
+        instruct_map = {}
+    if speaker and speaker in instruct_map:
+        return instruct_map[speaker] or ""
+    return ""
+
+
 def gen_dub_chunks():
     rprint("[🎬 Starting] Generating dubbing chunks...")
     df = pd.read_excel(_8_1_AUDIO_TASK)
@@ -196,6 +209,7 @@ def gen_dub_chunks():
     df['lines'] = None
     df['src_lines'] = None
     df['persona_lines'] = None
+    df['instruct_lines'] = None
 
     line_idx = 0
     for idx in range(len(df)):
@@ -214,6 +228,7 @@ def gen_dub_chunks():
         df.at[idx, 'lines'] = chunk_trans
         df.at[idx, 'src_lines'] = chunk_ori
         df.at[idx, 'persona_lines'] = [resolve_persona(s) for s in chunk_spk]
+        df.at[idx, 'instruct_lines'] = [resolve_instruct(s) for s in chunk_spk]
 
     # Save results
     df.to_excel(_8_1_AUDIO_TASK, index=False)

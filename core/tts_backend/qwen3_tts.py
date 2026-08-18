@@ -142,12 +142,12 @@ def qwen3_tts_for_videolingo(text, save_path, number, task_df, ref_choice=None, 
 
     client = _get_client(url)
 
-    # 情感指令：仅当服务端支持时才追加，避免多余参数报错
+    # 情感指令：只要服务端声明了 instruct 参数就必须传入（可能为空字符串，服务端会忽略），
+    # 否则 gradio_client 会因参数缺失报 "No value provided for required argument"
     eff_instruct = instruct or load_key("qwen3_tts.instruct") or ""
-    has_instruct = bool(eff_instruct) and _fn_supports_instruct(client)
 
     args = [text, "Auto", handle_file(ref_audio), ref_text or "", size]
-    if has_instruct:
+    if _fn_supports_instruct(client):
         args.append(eff_instruct)
     result = client.predict(*args, api_name="/fn_voice_clone")
 

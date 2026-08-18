@@ -72,10 +72,18 @@ def process_row(row: pd.Series, tasks_df: pd.DataFrame) -> Tuple[int, float]:
         persona_lines = eval(row['persona_lines']) if isinstance(row['persona_lines'], str) else row['persona_lines']
     if not persona_lines or len(persona_lines) < len(lines):
         persona_lines = [''] * len(lines)
+    # 每行对应的情感指令（instruct_lines 与 lines 等长；旧数据无该列则回落全局指令）
+    instruct_lines = None
+    if 'instruct_lines' in row and not pd.isna(row['instruct_lines']):
+        instruct_lines = eval(row['instruct_lines']) if isinstance(row['instruct_lines'], str) else row['instruct_lines']
+    if not instruct_lines or len(instruct_lines) < len(lines):
+        instruct_lines = [''] * len(lines)
     real_dur = 0
     for line_index, line in enumerate(lines):
         temp_file = TEMP_FILE_TEMPLATE.format(f"{number}_{line_index}")
-        tts_main(line, temp_file, number, tasks_df, persona_name=persona_lines[line_index] or None)
+        tts_main(line, temp_file, number, tasks_df,
+                 persona_name=persona_lines[line_index] or None,
+                 instruct=instruct_lines[line_index] or None)
         real_dur += get_audio_duration(temp_file)
     return number, real_dur
 
